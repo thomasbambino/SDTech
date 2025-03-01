@@ -1,13 +1,21 @@
-import { pgTable, text, serial, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+export const userRoleEnum = pgEnum("user_role", ["pending", "customer", "admin"]);
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  role: userRoleEnum("role").default("pending").notNull(),
+  email: text("email").notNull(),
+  phoneNumber: text("phone_number"),
   companyName: text("company_name"),
-  isAdmin: boolean("is_admin").default(false),
+  address: text("address"),
+  isTemporaryPassword: boolean("is_temporary_password").default(false),
+  lastPasswordChange: timestamp("last_password_change"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const projects = pgTable("projects", {
@@ -26,6 +34,7 @@ export const invoices = pgTable("invoices", {
   status: text("status").notNull(),
   dueDate: timestamp("due_date"),
   paidAt: timestamp("paid_at"),
+  freshbooksId: text("freshbooks_id").unique(),
 });
 
 export const documents = pgTable("documents", {
@@ -36,10 +45,23 @@ export const documents = pgTable("documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Schema for customer inquiry form
+export const insertInquirySchema = createInsertSchema(users).pick({
+  email: true,
+  phoneNumber: true,
+  companyName: true,
+  address: true,
+}).extend({
+  name: z.string().min(1, "Name is required"),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+  email: true,
   companyName: true,
+  phoneNumber: true,
+  address: true,
 });
 
 export const insertProjectSchema = createInsertSchema(projects).pick({
@@ -54,6 +76,7 @@ export const insertInvoiceSchema = createInsertSchema(invoices).pick({
   amount: true,
   status: true,
   dueDate: true,
+  freshbooksId: true,
 });
 
 export const insertDocumentSchema = createInsertSchema(documents).pick({
@@ -62,7 +85,11 @@ export const insertDocumentSchema = createInsertSchema(documents).pick({
   content: true,
 });
 
+export type InsertInquiry = z.infer<typeof insertInquirySchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertProject = z.infer<typeof insertProjectSchema>;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type User = typeof users.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;

@@ -30,7 +30,12 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (user) {
-      setLocation("/dashboard");
+      // If user has a temporary password, redirect to change password page
+      if (user.isTemporaryPassword) {
+        setLocation("/change-password");
+      } else {
+        setLocation("/dashboard");
+      }
     }
   }, [user, setLocation]);
 
@@ -106,6 +111,14 @@ export default function AuthPage() {
                       </Button>
                     </form>
                   </Form>
+                  <div className="mt-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      New client?{" "}
+                      <Button variant="link" className="p-0" asChild>
+                        <a href="/inquiry">Submit an inquiry</a>
+                      </Button>
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

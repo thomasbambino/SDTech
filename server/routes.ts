@@ -2,15 +2,119 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema } from "@shared/schema";
+import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema, insertInquirySchema } from "@shared/schema";
 import { freshbooksService } from "./services/freshbooks";
+import { scrypt, randomBytes } from "crypto";
+import { promisify } from "util";
+
+const scryptAsync = promisify(scrypt);
+
+// Middleware to ensure user is an admin
+function requireAdmin(req: any, res: any, next: any) {
+  if (!req.isAuthenticated() || req.user.role !== 'admin') {
+    return res.status(403).send("Admin access required");
+  }
+  next();
+}
+
+// Helper function to generate a temporary password
+function generateTemporaryPassword(): string {
+  return randomBytes(8).toString('hex');
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
-  // Freshbooks Integration
-  app.get("/api/freshbooks/auth", async (req, res) => {
+  // Customer Inquiry Form
+  app.post("/api/inquiries", async (req, res) => {
+    try {
+      const inquiryData = insertInquirySchema.parse(req.body);
+
+      // Create user with temporary password
+      const tempPassword = generateTemporaryPassword();
+      const hashedPassword = await storage.hashPassword(tempPassword);
+
+      const user = await storage.createUser({
+        username: inquiryData.email, // Use email as username
+        password: hashedPassword,
+        email: inquiryData.email,
+        phoneNumber: inquiryData.phoneNumber,
+        companyName: inquiryData.companyName,
+        address: inquiryData.address,
+        role: "pending",
+        isTemporaryPassword: true,
+      });
+
+      // TODO: Send email with temporary password
+      // For now, return it in response (only in development)
+      res.status(201).json({ 
+        message: "Inquiry submitted successfully",
+        tempPassword // Remove this in production
+      });
+    } catch (error) {
+      console.error("Error creating inquiry:", error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // User Management (Admin only)
+  app.get("/api/users", requireAdmin, async (req, res) => {
+    const users = await storage.getAllUsers();
+    res.json(users);
+  });
+
+  app.patch("/api/users/:id/role", requireAdmin, async (req, res) => {
+    const { role } = req.body;
+    if (!['pending', 'customer', 'admin'].includes(role)) {
+      return res.status(400).send("Invalid role");
+    }
+
+    try {
+      const user = await storage.updateUserRole(parseInt(req.params.id), role);
+      res.json(user);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/users/:id/reset-password", requireAdmin, async (req, res) => {
+    try {
+      const tempPassword = generateTemporaryPassword();
+      const hashedPassword = await storage.hashPassword(tempPassword);
+
+      await storage.updateUserPassword(parseInt(req.params.id), hashedPassword, true);
+
+      // TODO: Send email with temporary password
+      // For now, return it in response (only in development)
+      res.json({ 
+        message: "Password reset successful",
+        tempPassword // Remove this in production
+      });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Password Change (for users with temporary password)
+  app.post("/api/change-password", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const { newPassword } = req.body;
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).send("Invalid password");
+    }
+
+    try {
+      const hashedPassword = await storage.hashPassword(newPassword);
+      await storage.updateUserPassword(req.user.id, hashedPassword, false);
+      res.json({ message: "Password updated successfully" });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Freshbooks Integration (Admin only)
+  app.get("/api/freshbooks/auth", requireAdmin, async (req, res) => {
     try {
       const authUrl = await freshbooksService.getAuthUrl();
       res.json({ authUrl });
@@ -20,8 +124,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/freshbooks/callback", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+  app.get("/api/freshbooks/callback", requireAdmin, async (req, res) => {
     try {
       const code = req.query.code as string;
       if (!code) {
@@ -37,8 +140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/freshbooks/sync", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
+  app.post("/api/freshbooks/sync", requireAdmin, async (req, res) => {
     const tokens = req.session.freshbooksTokens;
     if (!tokens) return res.status(401).send("Freshbooks not connected");
 

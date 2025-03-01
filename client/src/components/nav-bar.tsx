@@ -53,8 +53,25 @@ export function NavBar() {
                     </NavigationMenuLink>
                   </Link>
                 </NavigationMenuItem>
+                {user.role === "admin" && (
+                  <NavigationMenuItem>
+                    <Link href="/admin/users">
+                      <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                        User Management
+                      </NavigationMenuLink>
+                    </Link>
+                  </NavigationMenuItem>
+                )}
               </>
-            ) : null}
+            ) : (
+              <NavigationMenuItem>
+                <Link href="/inquiry">
+                  <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                    Submit Inquiry
+                  </NavigationMenuLink>
+                </Link>
+              </NavigationMenuItem>
+            )}
           </NavigationMenuList>
         </NavigationMenu>
 
