@@ -1,21 +1,30 @@
-import { Client } from "@freshbooks/api";
 import type { User } from "@shared/schema";
 
 export class FreshbooksService {
-  private client: any; // temporarily type as any while we debug
+  private client: any | null = null; // temporarily type as any while we debug
 
-  constructor() {
+  private async ensureClient() {
+    if (this.client) return this.client;
+
     if (!process.env.FRESHBOOKS_CLIENT_ID) {
       throw new Error("FRESHBOOKS_CLIENT_ID environment variable is not set");
     }
 
-    console.log("Initializing Freshbooks client...");
-    this.client = new Client(process.env.FRESHBOOKS_CLIENT_ID);
-    console.log("Freshbooks client initialized successfully");
+    try {
+      console.log("Initializing Freshbooks client...");
+      const FreshBooks = await import('@freshbooks/api');
+      this.client = new FreshBooks.default(process.env.FRESHBOOKS_CLIENT_ID);
+      console.log("Freshbooks client initialized successfully");
+      return this.client;
+    } catch (error) {
+      console.error("Error initializing Freshbooks client:", error);
+      throw error;
+    }
   }
 
-  getAuthUrl(): string {
-    return this.client.getAuthRequestUrl([
+  async getAuthUrl(): Promise<string> {
+    const client = await this.ensureClient();
+    return client.getAuthRequestUrl([
       "user:profile:read",
       "user:projects:read",
       "user:invoices:read",
@@ -29,7 +38,8 @@ export class FreshbooksService {
 
     try {
       console.log("Exchanging auth code for tokens...");
-      const tokenResponse = await this.client.getAuthorizationToken({
+      const client = await this.ensureClient();
+      const tokenResponse = await client.getAuthorizationToken({
         code,
         clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
@@ -55,10 +65,11 @@ export class FreshbooksService {
   async syncProjects(accessToken: string) {
     try {
       console.log("Setting access token for project sync...");
-      this.client.setAccessToken(accessToken);
+      const client = await this.ensureClient();
+      client.setAccessToken(accessToken);
 
       console.log("Fetching user details...");
-      const userResponse = await this.client.getCurrentUser();
+      const userResponse = await client.getCurrentUser();
       const accountId = userResponse.accountId;
 
       if (!accountId) {
@@ -66,7 +77,7 @@ export class FreshbooksService {
       }
 
       console.log(`Fetching projects for account ${accountId}...`);
-      const projectsResponse = await this.client.projects.list({
+      const projectsResponse = await client.projects.list({
         accountId,
         include: ["tasks", "team"],
       });
@@ -81,10 +92,11 @@ export class FreshbooksService {
   async syncInvoices(accessToken: string) {
     try {
       console.log("Setting access token for invoice sync...");
-      this.client.setAccessToken(accessToken);
+      const client = await this.ensureClient();
+      client.setAccessToken(accessToken);
 
       console.log("Fetching user details...");
-      const userResponse = await this.client.getCurrentUser();
+      const userResponse = await client.getCurrentUser();
       const accountId = userResponse.accountId;
 
       if (!accountId) {
@@ -92,7 +104,7 @@ export class FreshbooksService {
       }
 
       console.log(`Fetching invoices for account ${accountId}...`);
-      const invoicesResponse = await this.client.invoices.list({
+      const invoicesResponse = await client.invoices.list({
         accountId,
         include: ["lines", "payments"],
       });

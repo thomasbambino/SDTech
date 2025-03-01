@@ -3,18 +3,16 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema } from "@shared/schema";
-// Temporarily comment out Freshbooks import while debugging
-// import { freshbooksService } from "./services/freshbooks";
+import { freshbooksService } from "./services/freshbooks";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
-  /* Temporarily disable Freshbooks routes for debugging
   // Freshbooks Integration
-  app.get("/api/freshbooks/auth", (req, res) => {
+  app.get("/api/freshbooks/auth", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
-      const authUrl = freshbooksService.getAuthUrl();
+      const authUrl = await freshbooksService.getAuthUrl();
       res.json({ authUrl });
     } catch (error) {
       console.error("Error getting Freshbooks auth URL:", error);
@@ -55,7 +53,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).send("Failed to sync with Freshbooks");
     }
   });
-  */
 
   // Projects
   app.get("/api/projects", async (req, res) => {
