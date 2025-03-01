@@ -1,0 +1,36 @@
+FreshBooks APIs use the OAuth 2.0 protocol for authentication and authorization.
+OAuth2 is an authorization framework that enables applications to obtain limited access to user accounts over HTTP. It is used by services like Google, Facebook, Stripe, and Slack. This method creates a token that lasts for 12 hours to keep your account secure and connected. For more details about OAuth2 itself, check out: the official documentation.
+
+Basic Flow
+A user visits your Authorization link, which you supply on your website, and which we supply clickable versions of under app settings on your app management page.They are sent to an Authorization page that FreshBooks hosts.
+The user logs in and sees the Scopes your App will have access to and clicks ‘Authorize’.
+They are redirected back to your website which you provided in the app settings (redirect URI), with a ‘code’ parameter in the URL known as the ‘authorization code’.
+You send us a request from your server containing the authorization code, your client id, client secret, and the redirect URI the user followed
+We return to you a pair of tokens, an access token (called a Bearer token) and a refresh token (used to get a new access token when it expires).
+Your app can now make successful calls on that user’s behalf using the Bearer token. Congrats!
+Redirect URI Limitations
+For security reasons, redirect URIs must specify HTTPS as their protocol. While testing/developing your application, if you are unable to set up a self signed certificate to use or to work in a secured public test environment, you may manually change the URL to HTTP in your browser to complete the connection.
+
+Redirect URIs also cannot contain query string parameters. Your application may instead url-encode arbitrary data and pass into an Authorize link via an additional state parameter. That state parameter and its value will be inserted into the Redirect URI when the client is sent there after granting permission to your application to continue.
+
+Multiple Redirect URIs are allowed per application, specified on separate lines of the Redirect URI field on the developer page.
+
+If you wish to manage that complexity yourself, you can request a Bearer and Refresh token pair from our auth/token endpoint using the process described in the code pane on this page.
+
+Refresh Tokens and Token Lifespans
+Bearer Tokens are not long lived. They last for 12 hours, after which they are no longer able to authenticate requests, and may produce different errors depending upon the service being called. The remedy to use in these situations is a Refresh Token.
+
+Refresh Tokens live forever, but are one-time-use, and only one Refresh Token can be alive at any time per user per application. A new Refresh Token is generated every time a Bearer Token is issued for a given user of a given application, and all old Refresh Tokens immediately become invalid. Make sure that whenever you receive a new Bearer Token, you write its companion Refresh token down somewhere safe to refresh your access, or you’ll have to re-authorize your application again manually.
+
+Bearer Tokens don’t interfere with each other’s lives the same way, so you could have several valid Bearer Tokens at any given point in time. They only expire when you manually POST to the token/revoke endpoint or when their time runs out.
+
+Making a Refresh Token Call
+Make a Refresh call by following the same template shown in the code pane on this page, but supply a grant type of ‘refresh_token’ instead of ‘authorization’, and instead of a ‘code’ argument, supply a ‘refresh_token’ argument with the most recent Refresh Token you were granted.
+
+Authorization URL
+Authorization URLs for your FreshBooks integration will look like the following:
+
+https://auth.freshbooks.com/oauth/authorize/?response_type=code&redirect_uri=<REDIRECT_URL>&client_id=<CLIENT_ID>
+
+Use a Library!
+If you’re a developer of a web application using Python, Ruby, or Javascript, it’s recommended that you use a popular library written in your language of choice to manage the details of connecting via OAuth2. Such libraries typically provide configuration options for you to include your client_id, client_secret, and redirect_uri, then allow you to make higher level calls in your program to initiate or refresh authorization.
