@@ -185,6 +185,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this endpoint before the projects routes
+  app.get("/api/projects/recent-invoices", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    // Get all projects for the user
+    const projects = await storage.getProjects(req.user.id);
+
+    // Get invoices for each project
+    const invoicesPromises = projects.map(project => storage.getInvoices(project.id));
+    const invoicesByProject = await Promise.all(invoicesPromises);
+
+    // Flatten and sort by due date
+    const allInvoices = invoicesByProject
+      .flat()
+      .sort((a, b) => {
+        if (!a.dueDate || !b.dueDate) return 0;
+        return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
+      })
+      .slice(0, 5); // Get only the 5 most recent
+
+    res.json(allInvoices);
+  });
+
   // Projects
   app.get("/api/projects", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
