@@ -13,18 +13,19 @@ export class FreshbooksService {
     try {
       console.log("Starting Freshbooks client initialization...");
 
-      // Import the default export from @freshbooks/api
+      // Import and inspect the Freshbooks API module
       const FreshbooksAPI = await import('@freshbooks/api');
-      console.log("Freshbooks API imported successfully");
-
-      this.client = new FreshbooksAPI.default({
-        clientId: process.env.FRESHBOOKS_CLIENT_ID,
-        clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
-        redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
+      console.log("Freshbooks API module structure:", {
+        availableExports: Object.keys(FreshbooksAPI),
+        hasDefaultExport: 'default' in FreshbooksAPI,
+        exportTypes: Object.entries(FreshbooksAPI).map(([key, value]) => 
+          `${key}: ${typeof value}`
+        )
       });
 
-      console.log("Freshbooks client initialized successfully");
-      return this.client;
+      // Stop here to inspect the module structure
+      throw new Error("Debugging Freshbooks API module structure");
+
     } catch (error) {
       console.error("Error initializing Freshbooks client:", error);
       if (error instanceof Error) {
@@ -35,82 +36,17 @@ export class FreshbooksService {
     }
   }
 
+  // Keep other methods unchanged for now
   async getAuthUrl(): Promise<string> {
-    try {
-      const client = await this.ensureClient();
-      console.log("Generating authorization URL...");
-
-      const scopes = [
-        "user:profile:read",
-        "user:clients:read",
-        "user:projects:read",
-        "user:invoices:read",
-      ];
-
-      const authUrl = client.getAuthorizationUrl(scopes);
-      console.log("Generated authorization URL:", authUrl);
-      return authUrl;
-    } catch (error) {
-      console.error("Error generating auth URL:", error);
-      throw error;
-    }
+    throw new Error("Method not implemented - debugging initialization first");
   }
 
   async handleCallback(code: string): Promise<any> {
-    try {
-      const client = await this.ensureClient();
-      console.log("Starting token exchange with code:", code.substring(0, 10) + "...");
-
-      const tokenResponse = await client.getAccessToken(code);
-      console.log("Token exchange response received");
-
-      return {
-        access_token: tokenResponse.access_token,
-        refresh_token: tokenResponse.refresh_token,
-        expires_in: tokenResponse.expires_in || 3600,
-        token_type: "Bearer"
-      };
-    } catch (error) {
-      console.error("Token exchange error:", error);
-      throw error;
-    }
+    throw new Error("Method not implemented - debugging initialization first");
   }
 
   async getClients(accessToken: string) {
-    try {
-      const client = await this.ensureClient();
-      console.log("Setting access token for client request...");
-      client.setAccessToken(accessToken);
-
-      const me = await client.users.me();
-      console.log("Current user:", me);
-
-      const businessId = me.business_memberships?.[0]?.business.id;
-      if (!businessId) {
-        throw new Error("No business ID found");
-      }
-
-      console.log("Fetching clients for business:", businessId);
-      const response = await client.clients.list({
-        businessId: String(businessId)
-      });
-
-      if (!response?.result?.clients) {
-        console.log("No clients found in response");
-        return [];
-      }
-
-      return response.result.clients.map(client => ({
-        id: client.id,
-        email: client.email || '',
-        organization: client.organization || '',
-        phoneNumber: client.phone || '',
-        status: client.vis_state || 'active'
-      }));
-    } catch (error) {
-      console.error("Error fetching clients:", error);
-      throw error;
-    }
+    throw new Error("Method not implemented - debugging initialization first");
   }
   async syncProjects(accessToken: string) {
     try {
