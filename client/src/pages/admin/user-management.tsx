@@ -84,9 +84,12 @@ export default function UserManagement() {
               <CardContent className="flex items-center justify-between p-6">
                 <div>
                   <div className="font-semibold">{user.username}</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm text-muted-foreground mb-2">
                     {user.companyName}
                   </div>
+                  <Badge variant={user.isTemporaryPassword ? "secondary" : "outline"}>
+                    {user.isTemporaryPassword ? "Temp Password" : "Active"}
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-4">
                   <Select
@@ -112,7 +115,6 @@ export default function UserManagement() {
                   >
                     Reset Password
                   </Button>
-                  <Badge>{user.isTemporaryPassword ? "Temp Password" : "Active"}</Badge>
                 </div>
               </CardContent>
             </Card>
