@@ -3,25 +3,34 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema } from "@shared/schema";
+// Temporarily comment out Freshbooks import while debugging
 // import { freshbooksService } from "./services/freshbooks";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
-  /* Temporarily disabled for debugging
+  /* Temporarily disable Freshbooks routes for debugging
   // Freshbooks Integration
   app.get("/api/freshbooks/auth", (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const authUrl = freshbooksService.getAuthUrl();
-    res.json({ authUrl });
+    try {
+      const authUrl = freshbooksService.getAuthUrl();
+      res.json({ authUrl });
+    } catch (error) {
+      console.error("Error getting Freshbooks auth URL:", error);
+      res.status(500).send("Failed to get Freshbooks authentication URL");
+    }
   });
 
   app.get("/api/freshbooks/callback", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     try {
       const code = req.query.code as string;
+      if (!code) {
+        throw new Error("No authorization code provided");
+      }
+
       const tokens = await freshbooksService.handleCallback(code, req.user);
-      // Store tokens in session temporarily
       req.session.freshbooksTokens = tokens;
       res.redirect("/dashboard?freshbooks=connected");
     } catch (error) {

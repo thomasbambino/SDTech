@@ -2,13 +2,16 @@ import { Client } from "@freshbooks/api";
 import type { User } from "@shared/schema";
 
 export class FreshbooksService {
-  private client: Client;
+  private client: any; // temporarily type as any while we debug
 
   constructor() {
     if (!process.env.FRESHBOOKS_CLIENT_ID) {
       throw new Error("FRESHBOOKS_CLIENT_ID environment variable is not set");
     }
+
+    console.log("Initializing Freshbooks client...");
     this.client = new Client(process.env.FRESHBOOKS_CLIENT_ID);
+    console.log("Freshbooks client initialized successfully");
   }
 
   getAuthUrl(): string {
@@ -25,7 +28,8 @@ export class FreshbooksService {
     }
 
     try {
-      const tokenResponse = await this.client.exchangeCodeForToken({
+      console.log("Exchanging auth code for tokens...");
+      const tokenResponse = await this.client.getAuthorizationToken({
         code,
         clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
@@ -35,6 +39,7 @@ export class FreshbooksService {
         throw new Error("Failed to get access token from Freshbooks");
       }
 
+      console.log("Successfully obtained access token");
       return {
         access_token: tokenResponse.access_token,
         refresh_token: tokenResponse.refresh_token,
@@ -49,10 +54,24 @@ export class FreshbooksService {
 
   async syncProjects(accessToken: string) {
     try {
+      console.log("Setting access token for project sync...");
       this.client.setAccessToken(accessToken);
 
-      const response = await this.client.users.projects.list();
-      return response.result?.projects || [];
+      console.log("Fetching user details...");
+      const userResponse = await this.client.getCurrentUser();
+      const accountId = userResponse.accountId;
+
+      if (!accountId) {
+        throw new Error("No Freshbooks account found");
+      }
+
+      console.log(`Fetching projects for account ${accountId}...`);
+      const projectsResponse = await this.client.projects.list({
+        accountId,
+        include: ["tasks", "team"],
+      });
+
+      return projectsResponse.projects || [];
     } catch (error) {
       console.error("Error syncing Freshbooks projects:", error);
       throw error;
@@ -61,10 +80,24 @@ export class FreshbooksService {
 
   async syncInvoices(accessToken: string) {
     try {
+      console.log("Setting access token for invoice sync...");
       this.client.setAccessToken(accessToken);
 
-      const response = await this.client.users.invoices.list();
-      return response.result?.invoices || [];
+      console.log("Fetching user details...");
+      const userResponse = await this.client.getCurrentUser();
+      const accountId = userResponse.accountId;
+
+      if (!accountId) {
+        throw new Error("No Freshbooks account found");
+      }
+
+      console.log(`Fetching invoices for account ${accountId}...`);
+      const invoicesResponse = await this.client.invoices.list({
+        accountId,
+        include: ["lines", "payments"],
+      });
+
+      return invoicesResponse.invoices || [];
     } catch (error) {
       console.error("Error syncing Freshbooks invoices:", error);
       throw error;
