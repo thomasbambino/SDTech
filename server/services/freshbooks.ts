@@ -12,11 +12,9 @@ export class FreshbooksService {
 
     try {
       console.log("Initializing Freshbooks client...");
-      // Import Freshbooks SDK correctly
-      const FreshBooksApi = await import('@freshbooks/api');
-      const FreshBooks = FreshBooksApi.default;
-
-      this.client = new FreshBooks(process.env.FRESHBOOKS_CLIENT_ID);
+      // Fix Freshbooks initialization
+      const { default: FreshBooks } = await import('@freshbooks/api');
+      this.client = FreshBooks(process.env.FRESHBOOKS_CLIENT_ID);
       console.log("Freshbooks client initialized successfully");
       return this.client;
     } catch (error) {
