@@ -1,8 +1,7 @@
 import type { User } from "@shared/schema";
-import { Client } from '@freshbooks/api';
 
 export class FreshbooksService {
-  private client: Client | null = null;
+  private client: any | null = null;
 
   private async ensureClient() {
     if (this.client) return this.client;
@@ -13,10 +12,14 @@ export class FreshbooksService {
 
     try {
       console.log("Initializing Freshbooks client...");
-      // Import using CommonJS require since the package seems to have issues with ESM
-      const FreshBooks = require('@freshbooks/api').Client;
 
-      this.client = new FreshBooks({
+      // Import Freshbooks SDK using dynamic import
+      const FreshBooksModule = await import('@freshbooks/api');
+
+      // Log the available exports to debug
+      console.log("Available FreshBooks exports:", Object.keys(FreshBooksModule));
+
+      this.client = new FreshBooksModule.Client({
         clientId: process.env.FRESHBOOKS_CLIENT_ID,
         clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
@@ -39,7 +42,6 @@ export class FreshbooksService {
       const client = await this.ensureClient();
       console.log("Getting authorization URL...");
 
-      // Initialize the OAuth2 flow
       const authUrl = client.getAuthorizationUrl([
         "user:profile:read",
         "user:clients:read",
@@ -66,19 +68,15 @@ export class FreshbooksService {
       });
 
       console.log("Token exchange response:", {
-        hasAccessToken: !!tokenResponse.access_token,
-        hasRefreshToken: !!tokenResponse.refresh_token,
-        expiresIn: tokenResponse.expires_in
+        hasAccessToken: !!tokenResponse.accessToken,
+        hasRefreshToken: !!tokenResponse.refreshToken,
+        expiresIn: tokenResponse.expiresIn
       });
 
-      if (!tokenResponse.access_token) {
-        throw new Error("Failed to get access token from Freshbooks");
-      }
-
       return {
-        access_token: tokenResponse.access_token,
-        refresh_token: tokenResponse.refresh_token,
-        expires_in: tokenResponse.expires_in || 3600,
+        access_token: tokenResponse.accessToken,
+        refresh_token: tokenResponse.refreshToken,
+        expires_in: tokenResponse.expiresIn || 3600,
         token_type: "Bearer"
       };
     } catch (error) {
@@ -92,30 +90,29 @@ export class FreshbooksService {
       const client = await this.ensureClient();
       client.setAccessToken(accessToken);
 
-      console.log("Fetching user details...");
-      const identity = await client.getCurrentUser();
-      console.log("User response:", identity);
+      console.log("Fetching user identity...");
+      const identity = await client.users.me();
 
-      if (!identity || !identity.accountId) {
+      if (!identity || !identity.id) {
+        console.error("Invalid identity response:", identity);
         throw new Error("Could not fetch user details");
       }
 
-      const accountId = identity.accountId;
-      console.log(`Fetching clients for account ${accountId}...`);
+      console.log("User identity:", identity);
+      const accountId = identity.id;
 
-      const clientsResponse = await client.clients.list({
+      console.log(`Fetching clients for account ${accountId}...`);
+      const response = await client.clients.list({
         accountId: String(accountId),
-        include: ["email", "organization", "phone"]
+        includes: ["email", "organization", "phone"]
       });
 
-      console.log("Raw clients response:", clientsResponse);
-
-      if (!clientsResponse || !clientsResponse.clients) {
-        console.log("No clients found in response");
+      if (!response || !response.clients) {
+        console.log("No clients found in response:", response);
         return [];
       }
 
-      return clientsResponse.clients.map(client => ({
+      return response.clients.map(client => ({
         id: client.id,
         email: client.email || '',
         organization: client.organization || '',
@@ -131,7 +128,6 @@ export class FreshbooksService {
       throw error;
     }
   }
-
   async syncProjects(accessToken: string) {
     try {
       const client = await this.ensureClient();
