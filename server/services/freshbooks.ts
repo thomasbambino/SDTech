@@ -1,7 +1,7 @@
 import type { User } from "@shared/schema";
 
 export class FreshbooksService {
-  private client: any | null = null; // temporarily type as any while we debug
+  private client: any | null = null;
 
   private async ensureClient() {
     if (this.client) return this.client;
@@ -12,18 +12,24 @@ export class FreshbooksService {
 
     try {
       console.log("Initializing Freshbooks client...");
-      const FreshBooks = await import('@freshbooks/api');
-      this.client = new FreshBooks.default(process.env.FRESHBOOKS_CLIENT_ID);
+      // Dynamically import to handle ESM module
+      const FreshBooks = (await import('@freshbooks/api')).default;
+      this.client = new FreshBooks(process.env.FRESHBOOKS_CLIENT_ID);
       console.log("Freshbooks client initialized successfully");
       return this.client;
     } catch (error) {
       console.error("Error initializing Freshbooks client:", error);
-      throw error;
+      // Return null instead of throwing to gracefully handle failure
+      return null;
     }
   }
 
   async getAuthUrl(): Promise<string> {
     const client = await this.ensureClient();
+    if (!client) {
+      throw new Error("Failed to initialize Freshbooks client");
+    }
+
     return client.getAuthRequestUrl([
       "user:profile:read",
       "user:projects:read",
@@ -31,7 +37,7 @@ export class FreshbooksService {
     ]);
   }
 
-  async handleCallback(code: string, user: User) {
+  async handleCallback(code: string): Promise<any> {
     if (!process.env.FRESHBOOKS_CLIENT_SECRET || !process.env.FRESHBOOKS_REDIRECT_URI) {
       throw new Error("Missing required Freshbooks environment variables");
     }
@@ -39,6 +45,10 @@ export class FreshbooksService {
     try {
       console.log("Exchanging auth code for tokens...");
       const client = await this.ensureClient();
+      if (!client) {
+        throw new Error("Failed to initialize Freshbooks client");
+      }
+
       const tokenResponse = await client.getAuthorizationToken({
         code,
         clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
@@ -66,6 +76,10 @@ export class FreshbooksService {
     try {
       console.log("Setting access token for project sync...");
       const client = await this.ensureClient();
+      if (!client) {
+        throw new Error("Failed to initialize Freshbooks client");
+      }
+
       client.setAccessToken(accessToken);
 
       console.log("Fetching user details...");
@@ -85,7 +99,7 @@ export class FreshbooksService {
       return projectsResponse.projects || [];
     } catch (error) {
       console.error("Error syncing Freshbooks projects:", error);
-      throw error;
+      return [];
     }
   }
 
@@ -93,6 +107,10 @@ export class FreshbooksService {
     try {
       console.log("Setting access token for invoice sync...");
       const client = await this.ensureClient();
+      if (!client) {
+        throw new Error("Failed to initialize Freshbooks client");
+      }
+
       client.setAccessToken(accessToken);
 
       console.log("Fetching user details...");
@@ -112,7 +130,7 @@ export class FreshbooksService {
       return invoicesResponse.invoices || [];
     } catch (error) {
       console.error("Error syncing Freshbooks invoices:", error);
-      throw error;
+      return [];
     }
   }
 }

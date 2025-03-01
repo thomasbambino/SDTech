@@ -44,6 +44,12 @@ async function createInitialAdminUser() {
   }
 }
 
+// Add parameter validation helper at the top with other helpers
+function validateId(id: string): number | null {
+  const parsed = parseInt(id);
+  return isNaN(parsed) ? null : parsed;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   await createInitialAdminUser(); // Add this line to create admin user on startup
@@ -70,7 +76,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // TODO: Send email with temporary password
       // For now, return it in response (only in development)
-      res.status(201).json({ 
+      res.status(201).json({
         message: "Inquiry submitted successfully",
         tempPassword // Remove this in production
       });
@@ -109,7 +115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // TODO: Send email with temporary password
       // For now, return it in response (only in development)
-      res.json({ 
+      res.json({
         message: "Password reset successful",
         tempPassword // Remove this in production
       });
@@ -188,7 +194,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/projects/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const project = await storage.getProject(parseInt(req.params.id));
+
+    const projectId = validateId(req.params.id);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
     if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
     res.json(project);
   });
@@ -206,7 +216,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Invoices
   app.get("/api/projects/:projectId/invoices", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const project = await storage.getProject(parseInt(req.params.projectId));
+
+    const projectId = validateId(req.params.projectId);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
     if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
     const invoices = await storage.getInvoices(project.id);
     res.json(invoices);
@@ -214,7 +228,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/projects/:projectId/invoices", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const project = await storage.getProject(parseInt(req.params.projectId));
+
+    const projectId = validateId(req.params.projectId);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
     if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
     const data = insertInvoiceSchema.parse(req.body);
     const invoice = await storage.createInvoice({
@@ -227,7 +245,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Documents
   app.get("/api/projects/:projectId/documents", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const project = await storage.getProject(parseInt(req.params.projectId));
+
+    const projectId = validateId(req.params.projectId);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
     if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
     const documents = await storage.getDocuments(project.id);
     res.json(documents);
@@ -235,7 +257,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/projects/:projectId/documents", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    const project = await storage.getProject(parseInt(req.params.projectId));
+
+    const projectId = validateId(req.params.projectId);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
     if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
     const data = insertDocumentSchema.parse(req.body);
     const document = await storage.createDocument({
