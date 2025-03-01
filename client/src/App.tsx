@@ -12,6 +12,7 @@ import Invoices from "@/pages/invoices";
 import UserManagement from "@/pages/admin/user-management";
 import CustomerInquiry from "@/pages/inquiry";
 import ChangePassword from "@/pages/change-password";
+import Clients from "@/pages/clients";
 import { ProtectedRoute } from "./lib/protected-route";
 
 function AdminRoute(props: Parameters<typeof ProtectedRoute>[0]) {
@@ -34,6 +35,7 @@ function Router() {
       <ProtectedRoute path="/projects" component={Projects} />
       <ProtectedRoute path="/invoices" component={Invoices} />
       <AdminRoute path="/admin/users" component={UserManagement} />
+      <AdminRoute path="/clients" component={Clients} />
       <Route component={NotFound} />
     </Switch>
   );

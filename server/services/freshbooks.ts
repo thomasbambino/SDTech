@@ -133,6 +133,37 @@ export class FreshbooksService {
       return [];
     }
   }
+
+  async getClients(accessToken: string) {
+    try {
+      console.log("Setting access token for client sync...");
+      const client = await this.ensureClient();
+      if (!client) {
+        throw new Error("Failed to initialize Freshbooks client");
+      }
+
+      client.setAccessToken(accessToken);
+
+      console.log("Fetching user details...");
+      const userResponse = await client.getCurrentUser();
+      const accountId = userResponse.accountId;
+
+      if (!accountId) {
+        throw new Error("No Freshbooks account found");
+      }
+
+      console.log(`Fetching clients for account ${accountId}...`);
+      const clientsResponse = await client.clients.list({
+        accountId,
+        include: ["email", "phone", "organization"],
+      });
+
+      return clientsResponse.clients || [];
+    } catch (error) {
+      console.error("Error fetching Freshbooks clients:", error);
+      return [];
+    }
+  }
 }
 
 export const freshbooksService = new FreshbooksService();

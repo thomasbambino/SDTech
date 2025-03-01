@@ -185,6 +185,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this endpoint with the other Freshbooks routes
+  app.get("/api/freshbooks/clients", requireAdmin, async (req, res) => {
+    const tokens = req.session.freshbooksTokens;
+    if (!tokens) return res.status(401).send("Freshbooks not connected");
+
+    try {
+      const clients = await freshbooksService.getClients(tokens.access_token);
+      res.json(clients);
+    } catch (error) {
+      console.error("Error fetching Freshbooks clients:", error);
+      res.status(500).send("Failed to fetch Freshbooks clients");
+    }
+  });
+
   // Add this endpoint before the projects routes
   app.get("/api/projects/recent-invoices", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
