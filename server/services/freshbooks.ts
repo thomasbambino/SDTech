@@ -1,8 +1,8 @@
 import type { User } from "@shared/schema";
-import type { Client as FreshBooksClient } from '@freshbooks/api';
+import { Client } from '@freshbooks/api';
 
 export class FreshbooksService {
-  private client: FreshBooksClient | null = null;
+  private client: Client | null = null;
 
   private async ensureClient() {
     if (this.client) return this.client;
@@ -17,8 +17,8 @@ export class FreshbooksService {
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI
       });
 
-      const { Client: FreshBooks } = await import('@freshbooks/api');
-      this.client = new FreshBooks({
+      const { Client } = await import('@freshbooks/api');
+      this.client = new Client({
         clientId: process.env.FRESHBOOKS_CLIENT_ID,
         clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
@@ -32,23 +32,29 @@ export class FreshbooksService {
         console.error("Error details:", error.message);
         console.error("Error stack:", error.stack);
       }
-      return null;
+      throw error; 
     }
   }
 
   async getAuthUrl(): Promise<string> {
     try {
       const client = await this.ensureClient();
-      if (!client) {
-        throw new Error("Failed to initialize Freshbooks client");
-      }
-
-      return client.authorizeUrl([
+      console.log("Getting authorization URL with scopes:", [
         "user:profile:read",
         "user:clients:read",
         "user:projects:read",
         "user:invoices:read",
       ]);
+
+      const authUrl = client.authorizeUrl([
+        "user:profile:read",
+        "user:clients:read",
+        "user:projects:read",
+        "user:invoices:read",
+      ]);
+
+      console.log("Generated authorization URL:", authUrl);
+      return authUrl;
     } catch (error) {
       console.error("Error getting auth URL:", error);
       throw error;
@@ -58,17 +64,22 @@ export class FreshbooksService {
   async handleCallback(code: string): Promise<any> {
     try {
       const client = await this.ensureClient();
-      if (!client) {
-        throw new Error("Failed to initialize Freshbooks client");
-      }
+      console.log("Starting token exchange with code:", code.substring(0, 10) + "...");
 
-      console.log("Exchanging auth code for tokens...");
+      console.log("Using redirect URI:", process.env.FRESHBOOKS_REDIRECT_URI);
+
       const tokenResponse = await client.token.exchange({
         code,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
       });
 
-      if (!tokenResponse) {
+      console.log("Token exchange response received:", {
+        hasAccessToken: !!tokenResponse.accessToken,
+        hasRefreshToken: !!tokenResponse.refreshToken,
+        expiresIn: tokenResponse.expiresIn
+      });
+
+      if (!tokenResponse || !tokenResponse.accessToken) {
         throw new Error("Failed to get access token from Freshbooks");
       }
 
@@ -88,41 +99,37 @@ export class FreshbooksService {
   async getClients(accessToken: string) {
     try {
       const client = await this.ensureClient();
-      if (!client) {
-        throw new Error("Failed to initialize Freshbooks client");
-      }
-
-      console.log("Setting access token for client fetch...");
       client.setAccessToken(accessToken);
 
       console.log("Fetching user details...");
-      const userResponse = await client.users.me();
-      console.log("User response:", userResponse);
+      const identity = await client.users.me();
+      console.log("User response:", identity);
 
-      if (!userResponse || !userResponse.id) {
+      if (!identity.response?.result?.id) {
         throw new Error("Could not fetch user details");
       }
 
-      const accountId = userResponse.id;
+      const accountId = identity.response.result.id;
       console.log(`Fetching clients for account ${accountId}...`);
 
-      const clientsResponse = await client.clients.list({
-        accountId,
-        includes: ["email", "organization", "phone"],
+      const { response } = await client.clients.list({
+        accountId: String(accountId),
+        include: ["email", "organization", "phone"]
       });
-      console.log("Raw clients response:", clientsResponse);
 
-      if (!clientsResponse || !clientsResponse.clients) {
+      console.log("Raw clients response:", response);
+
+      if (!response?.result?.clients) {
         console.log("No clients found in response");
         return [];
       }
 
-      return clientsResponse.clients.map(client => ({
+      return response.result.clients.map(client => ({
         id: client.id,
-        email: client.email,
-        organization: client.organization,
-        phoneNumber: client.phone,
-        status: client.visState || 'active'
+        email: client.email || '',
+        organization: client.organization || '',
+        phoneNumber: client.phone || '',
+        status: client.vis_state || 'active'
       }));
     } catch (error) {
       console.error("Error fetching Freshbooks clients:", error);
@@ -130,34 +137,29 @@ export class FreshbooksService {
         console.error("Error details:", error.message);
         console.error("Error stack:", error.stack);
       }
-      return [];
+      throw error;
     }
   }
 
   async syncProjects(accessToken: string) {
     try {
       const client = await this.ensureClient();
-      if (!client) {
-        throw new Error("Failed to initialize Freshbooks client");
-      }
-
       client.setAccessToken(accessToken);
 
-      console.log("Fetching user details...");
-      const userResponse = await client.users.me();
-      const accountId = userResponse.id;
+      const identity = await client.users.me();
+      const accountId = identity.response.result.id;
 
       if (!accountId) {
         throw new Error("No Freshbooks account found");
       }
 
       console.log(`Fetching projects for account ${accountId}...`);
-      const projectsResponse = await client.projects.list({
-        accountId,
-        includes: ["tasks", "team"],
+      const { response } = await client.projects.list({
+        accountId: String(accountId),
+        include: ["tasks", "team"]
       });
 
-      return projectsResponse.projects || [];
+      return response.result.projects || [];
     } catch (error) {
       console.error("Error syncing Freshbooks projects:", error);
       return [];
@@ -167,27 +169,22 @@ export class FreshbooksService {
   async syncInvoices(accessToken: string) {
     try {
       const client = await this.ensureClient();
-      if (!client) {
-        throw new Error("Failed to initialize Freshbooks client");
-      }
-
       client.setAccessToken(accessToken);
 
-      console.log("Fetching user details...");
-      const userResponse = await client.users.me();
-      const accountId = userResponse.id;
+      const identity = await client.users.me();
+      const accountId = identity.response.result.id;
 
       if (!accountId) {
         throw new Error("No Freshbooks account found");
       }
 
       console.log(`Fetching invoices for account ${accountId}...`);
-      const invoicesResponse = await client.invoices.list({
-        accountId,
-        includes: ["lines", "payments"],
+      const { response } = await client.invoices.list({
+        accountId: String(accountId),
+        include: ["lines", "payments"]
       });
 
-      return invoicesResponse.invoices || [];
+      return response.result.invoices || [];
     } catch (error) {
       console.error("Error syncing Freshbooks invoices:", error);
       return [];

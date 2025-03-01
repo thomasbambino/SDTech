@@ -1,7 +1,11 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import pg from 'pg'; // Added import for pg library
+import pg from 'pg';
+import session from 'express-session';
+import connectPg from 'connect-pg-simple';
+
+const PostgresSessionStore = connectPg(session);
 
 // Verify environment variables are set
 function checkEnvironmentVariables() {
@@ -24,6 +28,25 @@ function checkEnvironmentVariables() {
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Configure session middleware first
+const sessionConfig = {
+  store: new PostgresSessionStore({
+    pool: new pg.Pool({ connectionString: process.env.DATABASE_URL }),
+    createTableIfMissing: true,
+  }),
+  secret: process.env.SESSION_SECRET!,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+};
+
+app.set('trust proxy', 1);
+app.use(session(sessionConfig));
 
 // Add request logging middleware
 app.use((req, res, next) => {
@@ -71,10 +94,10 @@ app.get("/api/healthcheck", async (req, res) => {
       database: "connected" 
     });
   } catch (error) {
-    log('Health check failed:', error);
+    log('Health check failed:', error instanceof Error ? error.message : String(error));
     res.status(500).json({ 
       status: "error", 
-      message: error.message 
+      message: error instanceof Error ? error.message : String(error)
     });
   }
 });
@@ -94,17 +117,12 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 
     const server = await registerRoutes(app);
 
-    // importantly only setup vite in development and after
-    // setting up all the other routes so the catch-all route
-    // doesn't interfere with the other routes
     if (app.get("env") === "development") {
       await setupVite(app, server);
     } else {
       serveStatic(app);
     }
 
-    // ALWAYS serve the app on port 5000
-    // this serves both the API and the client
     const port = 5000;
     server.listen({
       port,
@@ -114,7 +132,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       log(`Server is running on port ${port}`);
     });
   } catch (error) {
-    log('Failed to start server:', error);
+    log('Failed to start server:', error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 })();

@@ -6,6 +6,7 @@ import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema, insertI
 import { freshbooksService } from "./services/freshbooks";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
+import { APIClient } from '@freshbooks/api';
 
 const scryptAsync = promisify(scrypt);
 
@@ -145,61 +146,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Freshbooks Integration (Admin only)
   app.get("/api/freshbooks/auth", requireAdmin, async (req, res) => {
     try {
+      console.log("Starting Freshbooks auth URL generation");
       const authUrl = await freshbooksService.getAuthUrl();
+      console.log("Generated Freshbooks auth URL:", authUrl);
       res.json({ authUrl });
     } catch (error) {
       console.error("Error getting Freshbooks auth URL:", error);
-      res.status(500).send("Failed to get Freshbooks authentication URL");
+      if (error instanceof Error) {
+        console.error("Error details:", error.message);
+        console.error("Stack trace:", error.stack);
+      }
+      res.status(500).json({
+        error: "Failed to get Freshbooks authentication URL",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
   app.get("/api/freshbooks/callback", requireAdmin, async (req, res) => {
     try {
+      console.log("Received Freshbooks callback");
       const code = req.query.code as string;
       if (!code) {
         throw new Error("No authorization code provided");
       }
 
-      const tokens = await freshbooksService.handleCallback(code, req.user);
+      console.log("Exchanging authorization code for tokens");
+      const tokens = await freshbooksService.handleCallback(code);
+      console.log("Successfully received tokens from Freshbooks");
+
+      // Store tokens in session
       req.session.freshbooksTokens = tokens;
-      res.redirect("/dashboard?freshbooks=connected");
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error("Error saving session:", err);
+            reject(err);
+          } else {
+            console.log("Session saved successfully");
+            resolve(true);
+          }
+        });
+      });
+
+      res.redirect("/clients?freshbooks=connected");
     } catch (error) {
-      console.error("Freshbooks auth error:", error);
-      res.redirect("/dashboard?freshbooks=error");
+      console.error("Freshbooks auth callback error:", error);
+      if (error instanceof Error) {
+        console.error("Error details:", error.message);
+        console.error("Stack trace:", error.stack);
+      }
+      res.redirect("/clients?freshbooks=error");
     }
   });
 
-  app.post("/api/freshbooks/sync", requireAdmin, async (req, res) => {
-    const tokens = req.session.freshbooksTokens;
-    if (!tokens) return res.status(401).send("Freshbooks not connected");
-
-    try {
-      const [projects, invoices] = await Promise.all([
-        freshbooksService.syncProjects(tokens.access_token),
-        freshbooksService.syncInvoices(tokens.access_token),
-      ]);
-      res.json({ projects, invoices });
-    } catch (error) {
-      console.error("Freshbooks sync error:", error);
-      res.status(500).send("Failed to sync with Freshbooks");
-    }
-  });
-
-  // Add this endpoint with the other Freshbooks routes
   app.get("/api/freshbooks/clients", requireAdmin, async (req, res) => {
-    const tokens = req.session.freshbooksTokens;
-    if (!tokens) return res.status(401).send("Freshbooks not connected");
-
     try {
+      console.log("Checking Freshbooks session tokens");
+      const tokens = req.session.freshbooksTokens;
+
+      if (!tokens) {
+        console.log("No Freshbooks tokens found in session");
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      console.log("Fetching Freshbooks clients with access token");
       const clients = await freshbooksService.getClients(tokens.access_token);
       res.json(clients);
     } catch (error) {
       console.error("Error fetching Freshbooks clients:", error);
-      res.status(500).send("Failed to fetch Freshbooks clients");
+      if (error instanceof Error) {
+        console.error("Error details:", error.message);
+        console.error("Stack trace:", error.stack);
+      }
+      res.status(500).json({
+        error: "Failed to fetch Freshbooks clients",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
-  // Add this endpoint before the projects routes
+  // Add this endpoint with the other Freshbooks routes
   app.get("/api/projects/recent-invoices", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
@@ -221,6 +251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     res.json(allInvoices);
   });
+
 
   // Projects
   app.get("/api/projects", async (req, res) => {
