@@ -3,9 +3,50 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema } from "@shared/schema";
+// import { freshbooksService } from "./services/freshbooks";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+
+  /* Temporarily disabled for debugging
+  // Freshbooks Integration
+  app.get("/api/freshbooks/auth", (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const authUrl = freshbooksService.getAuthUrl();
+    res.json({ authUrl });
+  });
+
+  app.get("/api/freshbooks/callback", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    try {
+      const code = req.query.code as string;
+      const tokens = await freshbooksService.handleCallback(code, req.user);
+      // Store tokens in session temporarily
+      req.session.freshbooksTokens = tokens;
+      res.redirect("/dashboard?freshbooks=connected");
+    } catch (error) {
+      console.error("Freshbooks auth error:", error);
+      res.redirect("/dashboard?freshbooks=error");
+    }
+  });
+
+  app.post("/api/freshbooks/sync", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const tokens = req.session.freshbooksTokens;
+    if (!tokens) return res.status(401).send("Freshbooks not connected");
+
+    try {
+      const [projects, invoices] = await Promise.all([
+        freshbooksService.syncProjects(tokens.access_token),
+        freshbooksService.syncInvoices(tokens.access_token),
+      ]);
+      res.json({ projects, invoices });
+    } catch (error) {
+      console.error("Freshbooks sync error:", error);
+      res.status(500).send("Failed to sync with Freshbooks");
+    }
+  });
+  */
 
   // Projects
   app.get("/api/projects", async (req, res) => {
