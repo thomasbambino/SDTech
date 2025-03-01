@@ -4,6 +4,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Mail, Phone, Building } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FreshbooksConnect } from "@/components/freshbooks-connect";
 
 interface FreshbooksClient {
   id: string;
@@ -14,56 +16,68 @@ interface FreshbooksClient {
 }
 
 export default function ClientsPage() {
-  const { data: clients, isLoading } = useQuery<FreshbooksClient[]>({
+  const { data: clients, isLoading, error } = useQuery<FreshbooksClient[]>({
     queryKey: ["/api/freshbooks/clients"],
   });
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <NavBar />
-        <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-          <Loader2 className="h-8 w-8 animate-spin text-border" />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
       <NavBar />
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Freshbooks Clients</h1>
-        <div className="grid gap-4">
-          {clients?.map((client) => (
-            <Card key={client.id}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold mb-2">{client.organization}</h2>
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4" />
-                        <span>{client.email}</span>
-                      </div>
-                      {client.phoneNumber && (
+
+        <div className="mb-8">
+          <FreshbooksConnect />
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center h-[200px]">
+            <Loader2 className="h-8 w-8 animate-spin text-border" />
+          </div>
+        ) : error ? (
+          <Alert variant="destructive">
+            <AlertDescription>
+              {error instanceof Error ? error.message : "Failed to load clients"}
+            </AlertDescription>
+          </Alert>
+        ) : !clients?.length ? (
+          <Alert>
+            <AlertDescription>
+              No clients found. Make sure you have connected your Freshbooks account and have active clients.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <div className="grid gap-4">
+            {clients.map((client) => (
+              <Card key={client.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h2 className="text-xl font-semibold mb-2">{client.organization}</h2>
+                      <div className="space-y-2 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4" />
-                          <span>{client.phoneNumber}</span>
+                          <Mail className="h-4 w-4" />
+                          <span>{client.email}</span>
                         </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <Building className="h-4 w-4" />
-                        <span>{client.organization}</span>
+                        {client.phoneNumber && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4" />
+                            <span>{client.phoneNumber}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Building className="h-4 w-4" />
+                          <span>{client.organization}</span>
+                        </div>
                       </div>
                     </div>
+                    <Badge>{client.status}</Badge>
                   </div>
-                  <Badge>{client.status}</Badge>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
