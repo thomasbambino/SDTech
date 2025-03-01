@@ -12,14 +12,15 @@ export class FreshbooksService {
 
     try {
       console.log("Initializing Freshbooks client...");
-      // Dynamically import to handle ESM module
-      const FreshBooks = (await import('@freshbooks/api')).default;
+      // Import Freshbooks SDK correctly
+      const FreshBooksApi = await import('@freshbooks/api');
+      const FreshBooks = FreshBooksApi.default;
+
       this.client = new FreshBooks(process.env.FRESHBOOKS_CLIENT_ID);
       console.log("Freshbooks client initialized successfully");
       return this.client;
     } catch (error) {
       console.error("Error initializing Freshbooks client:", error);
-      // Return null instead of throwing to gracefully handle failure
       return null;
     }
   }
@@ -32,6 +33,7 @@ export class FreshbooksService {
 
     return client.getAuthRequestUrl([
       "user:profile:read",
+      "user:clients:read",
       "user:projects:read",
       "user:invoices:read",
     ]);
@@ -146,19 +148,32 @@ export class FreshbooksService {
 
       console.log("Fetching user details...");
       const userResponse = await client.getCurrentUser();
-      const accountId = userResponse.accountId;
-
-      if (!accountId) {
+      if (!userResponse || !userResponse.accountId) {
         throw new Error("No Freshbooks account found");
       }
 
+      const accountId = userResponse.accountId;
       console.log(`Fetching clients for account ${accountId}...`);
+
       const clientsResponse = await client.clients.list({
         accountId,
-        include: ["email", "phone", "organization"],
+        include: ["email", "organization", "phone"],
       });
 
-      return clientsResponse.clients || [];
+      console.log("Clients response:", clientsResponse);
+
+      if (!clientsResponse || !clientsResponse.clients) {
+        console.log("No clients found in response");
+        return [];
+      }
+
+      return clientsResponse.clients.map(client => ({
+        id: client.id,
+        email: client.email,
+        organization: client.organization,
+        phoneNumber: client.phone,
+        status: client.visState || 'active'
+      }));
     } catch (error) {
       console.error("Error fetching Freshbooks clients:", error);
       return [];
