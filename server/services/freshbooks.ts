@@ -2,7 +2,7 @@ import type { User } from "@shared/schema";
 
 export class FreshbooksService {
   private baseUrl = 'https://api.freshbooks.com';
-  private authUrl = 'https://auth.freshbooks.com/oauth/authorize/';
+  private authUrl = 'https://auth.freshbooks.com/service/auth/oauth/authorize';
 
   async getAuthUrl(): Promise<string> {
     try {
@@ -13,10 +13,17 @@ export class FreshbooksService {
         "user:invoices:read",
       ];
 
+      // Log configuration for debugging
+      console.log("Generating auth URL with config:", {
+        redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
+        clientId: process.env.FRESHBOOKS_CLIENT_ID?.substring(0, 5) + '...',
+        scopes
+      });
+
       const params = new URLSearchParams({
-        response_type: 'code',
         client_id: process.env.FRESHBOOKS_CLIENT_ID!,
         redirect_uri: process.env.FRESHBOOKS_REDIRECT_URI!,
+        response_type: 'code',
         scope: scopes.join(' ')
       });
 
