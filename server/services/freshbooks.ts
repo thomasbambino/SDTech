@@ -12,9 +12,13 @@ export class FreshbooksService {
 
     try {
       console.log("Initializing Freshbooks client...");
-      // Fix Freshbooks initialization
-      const { default: FreshBooks } = await import('@freshbooks/api');
-      this.client = FreshBooks(process.env.FRESHBOOKS_CLIENT_ID);
+      // Import Freshbooks SDK correctly
+      const { default: FreshBooksModule } = await import('@freshbooks/api');
+      this.client = new FreshBooksModule({
+        clientId: process.env.FRESHBOOKS_CLIENT_ID,
+        clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
+        redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
+      });
       console.log("Freshbooks client initialized successfully");
       return this.client;
     } catch (error) {
@@ -29,7 +33,7 @@ export class FreshbooksService {
       throw new Error("Failed to initialize Freshbooks client");
     }
 
-    return client.getAuthRequestUrl([
+    return client.authorizeUrl([
       "user:profile:read",
       "user:clients:read",
       "user:projects:read",
@@ -49,9 +53,8 @@ export class FreshbooksService {
         throw new Error("Failed to initialize Freshbooks client");
       }
 
-      const tokenResponse = await client.getAuthorizationToken({
+      const tokenResponse = await client.token.exchange({
         code,
-        clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
       });
 
@@ -61,9 +64,9 @@ export class FreshbooksService {
 
       console.log("Successfully obtained access token");
       return {
-        access_token: tokenResponse.access_token,
-        refresh_token: tokenResponse.refresh_token,
-        expires_in: tokenResponse.expires_in || 3600,
+        access_token: tokenResponse.accessToken,
+        refresh_token: tokenResponse.refreshToken,
+        expires_in: tokenResponse.expiresIn || 3600,
         token_type: "Bearer"
       };
     } catch (error) {
@@ -83,8 +86,8 @@ export class FreshbooksService {
       client.setAccessToken(accessToken);
 
       console.log("Fetching user details...");
-      const userResponse = await client.getCurrentUser();
-      const accountId = userResponse.accountId;
+      const userResponse = await client.users.me();
+      const accountId = userResponse.id;
 
       if (!accountId) {
         throw new Error("No Freshbooks account found");
@@ -93,7 +96,7 @@ export class FreshbooksService {
       console.log(`Fetching projects for account ${accountId}...`);
       const projectsResponse = await client.projects.list({
         accountId,
-        include: ["tasks", "team"],
+        includes: ["tasks", "team"],
       });
 
       return projectsResponse.projects || [];
@@ -114,8 +117,8 @@ export class FreshbooksService {
       client.setAccessToken(accessToken);
 
       console.log("Fetching user details...");
-      const userResponse = await client.getCurrentUser();
-      const accountId = userResponse.accountId;
+      const userResponse = await client.users.me();
+      const accountId = userResponse.id;
 
       if (!accountId) {
         throw new Error("No Freshbooks account found");
@@ -124,7 +127,7 @@ export class FreshbooksService {
       console.log(`Fetching invoices for account ${accountId}...`);
       const invoicesResponse = await client.invoices.list({
         accountId,
-        include: ["lines", "payments"],
+        includes: ["lines", "payments"],
       });
 
       return invoicesResponse.invoices || [];
@@ -145,17 +148,17 @@ export class FreshbooksService {
       client.setAccessToken(accessToken);
 
       console.log("Fetching user details...");
-      const userResponse = await client.getCurrentUser();
-      if (!userResponse || !userResponse.accountId) {
+      const userResponse = await client.users.me();
+      if (!userResponse || !userResponse.id) {
         throw new Error("No Freshbooks account found");
       }
 
-      const accountId = userResponse.accountId;
+      const accountId = userResponse.id;
       console.log(`Fetching clients for account ${accountId}...`);
 
       const clientsResponse = await client.clients.list({
         accountId,
-        include: ["email", "organization", "phone"],
+        includes: ["email", "organization", "phone"],
       });
 
       console.log("Clients response:", clientsResponse);
