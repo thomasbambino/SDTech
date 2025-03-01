@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
@@ -34,6 +34,13 @@ export function FreshbooksConnect() {
       });
     },
   });
+
+  // Handle connect button click
+  const handleConnect = () => {
+    if (authData?.authUrl) {
+      window.open(authData.authUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   // Check if we just completed Freshbooks connection
   const params = new URLSearchParams(location.split("?")[1]);
@@ -82,10 +89,8 @@ export function FreshbooksConnect() {
               Loading...
             </Button>
           ) : (
-            <Button asChild variant="outline">
-              <Link href={authData?.authUrl}>
-                Connect Freshbooks
-              </Link>
+            <Button onClick={handleConnect} variant="outline">
+              Connect Freshbooks
             </Button>
           )}
           <Button 
