@@ -22,8 +22,31 @@ function generateTemporaryPassword(): string {
   return randomBytes(8).toString('hex');
 }
 
+// Add this helper function at the top with the other imports and helpers
+async function createInitialAdminUser() {
+  try {
+    const existingAdmin = await storage.getUserByUsername('admin@sdtechpros.com');
+    if (!existingAdmin) {
+      const hashedPassword = await storage.hashPassword('admin123');
+      await storage.createUser({
+        username: 'admin@sdtechpros.com',
+        password: hashedPassword,
+        email: 'admin@sdtechpros.com',
+        role: 'admin',
+        companyName: 'SD Tech Pros',
+        isTemporaryPassword: false,
+      });
+      console.log('Initial admin user created successfully');
+    }
+  } catch (error) {
+    console.error('Error creating initial admin user:', error);
+    throw error;
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+  await createInitialAdminUser(); // Add this line to create admin user on startup
 
   // Customer Inquiry Form
   app.post("/api/inquiries", async (req, res) => {
