@@ -1,4 +1,4 @@
-import { drizzle } from 'drizzle-orm/postgresql';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import session from "express-session";
 import connectPg from "connect-pg-simple";
