@@ -1,7 +1,8 @@
 import type { User } from "@shared/schema";
+import type { Client as FreshBooksClient } from '@freshbooks/api';
 
 export class FreshbooksService {
-  private client: any | null = null;
+  private client: FreshBooksClient | null = null;
 
   private async ensureClient() {
     if (this.client) return this.client;
@@ -16,7 +17,7 @@ export class FreshbooksService {
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI
       });
 
-      const FreshBooks = (await import('@freshbooks/api')).default;
+      const { Client: FreshBooks } = await import('@freshbooks/api');
       this.client = new FreshBooks({
         clientId: process.env.FRESHBOOKS_CLIENT_ID,
         clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
@@ -135,7 +136,6 @@ export class FreshbooksService {
 
   async syncProjects(accessToken: string) {
     try {
-      console.log("Setting access token for project sync...");
       const client = await this.ensureClient();
       if (!client) {
         throw new Error("Failed to initialize Freshbooks client");
@@ -166,7 +166,6 @@ export class FreshbooksService {
 
   async syncInvoices(accessToken: string) {
     try {
-      console.log("Setting access token for invoice sync...");
       const client = await this.ensureClient();
       if (!client) {
         throw new Error("Failed to initialize Freshbooks client");
