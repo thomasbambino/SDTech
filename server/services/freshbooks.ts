@@ -1,7 +1,8 @@
 import type { User } from "@shared/schema";
+import { Client } from '@freshbooks/api';
 
 export class FreshbooksService {
-  private client: any | null = null;
+  private client: Client | null = null;
 
   private async ensureClient() {
     if (this.client) return this.client;
@@ -11,15 +12,14 @@ export class FreshbooksService {
     }
 
     try {
-      console.log("Initializing Freshbooks client...");
+      console.log("Initializing Freshbooks client with environment variables:", {
+        clientId: process.env.FRESHBOOKS_CLIENT_ID?.substring(0, 5) + '...',
+        redirectUri: process.env.FRESHBOOKS_REDIRECT_URI
+      });
 
-      // Import Freshbooks SDK using dynamic import
-      const FreshBooksModule = await import('@freshbooks/api');
+      const { Client } = await import('@freshbooks/api');
 
-      // Log the available exports to debug
-      console.log("Available FreshBooks exports:", Object.keys(FreshBooksModule));
-
-      this.client = new FreshBooksModule.Client({
+      this.client = new Client({
         clientId: process.env.FRESHBOOKS_CLIENT_ID,
         clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
@@ -33,7 +33,7 @@ export class FreshbooksService {
         console.error("Error details:", error.message);
         console.error("Stack trace:", error.stack);
       }
-      throw error;
+      throw new Error("Failed to initialize Freshbooks client: " + (error instanceof Error ? error.message : String(error)));
     }
   }
 
@@ -42,35 +42,35 @@ export class FreshbooksService {
       const client = await this.ensureClient();
       console.log("Getting authorization URL...");
 
-      const authUrl = client.getAuthorizationUrl([
+      const scopes = [
         "user:profile:read",
         "user:clients:read",
         "user:projects:read",
         "user:invoices:read",
-      ]);
+      ];
+      console.log("Requesting scopes:", scopes);
 
-      console.log("Generated authorization URL:", authUrl);
-      return authUrl;
+      return client.authorizeUrl(scopes);
     } catch (error) {
       console.error("Error getting auth URL:", error);
-      throw error;
+      throw new Error("Failed to get authorization URL: " + (error instanceof Error ? error.message : String(error)));
     }
   }
 
   async handleCallback(code: string): Promise<any> {
     try {
       const client = await this.ensureClient();
-      console.log("Exchanging auth code for tokens...");
+      console.log("Exchanging authorization code for tokens...");
 
-      const tokenResponse = await client.getAccessToken({
+      const tokenResponse = await client.token.exchange({
         code,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
       });
 
-      console.log("Token exchange response:", {
+      console.log("Token exchange successful:", {
         hasAccessToken: !!tokenResponse.accessToken,
         hasRefreshToken: !!tokenResponse.refreshToken,
-        expiresIn: tokenResponse.expiresIn
+        expiresIn: tokenResponse.expiresIn,
       });
 
       return {
@@ -80,8 +80,8 @@ export class FreshbooksService {
         token_type: "Bearer"
       };
     } catch (error) {
-      console.error("Error getting Freshbooks access token:", error);
-      throw error;
+      console.error("Error during token exchange:", error);
+      throw new Error("Failed to exchange authorization code: " + (error instanceof Error ? error.message : String(error)));
     }
   }
 
@@ -90,18 +90,17 @@ export class FreshbooksService {
       const client = await this.ensureClient();
       client.setAccessToken(accessToken);
 
-      console.log("Fetching user identity...");
+      console.log("Getting current user identity...");
       const identity = await client.users.me();
+      console.log("User identity response:", identity);
 
-      if (!identity || !identity.id) {
-        console.error("Invalid identity response:", identity);
-        throw new Error("Could not fetch user details");
+      if (!identity || !identity.accountId) {
+        throw new Error("Could not fetch user identity");
       }
 
-      console.log("User identity:", identity);
-      const accountId = identity.id;
-
+      const accountId = identity.accountId;
       console.log(`Fetching clients for account ${accountId}...`);
+
       const response = await client.clients.list({
         accountId: String(accountId),
         includes: ["email", "organization", "phone"]
@@ -121,11 +120,7 @@ export class FreshbooksService {
       }));
     } catch (error) {
       console.error("Error fetching Freshbooks clients:", error);
-      if (error instanceof Error) {
-        console.error("Error details:", error.message);
-        console.error("Stack trace:", error.stack);
-      }
-      throw error;
+      throw new Error("Failed to fetch clients: " + (error instanceof Error ? error.message : String(error)));
     }
   }
   async syncProjects(accessToken: string) {
