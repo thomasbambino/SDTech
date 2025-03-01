@@ -12,13 +12,11 @@ export class FreshbooksService {
     }
 
     try {
-      console.log("Initializing Freshbooks client with config:", {
-        clientId: process.env.FRESHBOOKS_CLIENT_ID,
-        redirectUri: process.env.FRESHBOOKS_REDIRECT_URI
-      });
+      console.log("Initializing Freshbooks client...");
+      // Import using CommonJS require since the package seems to have issues with ESM
+      const FreshBooks = require('@freshbooks/api').Client;
 
-      const { Client } = await import('@freshbooks/api');
-      this.client = new Client({
+      this.client = new FreshBooks({
         clientId: process.env.FRESHBOOKS_CLIENT_ID,
         clientSecret: process.env.FRESHBOOKS_CLIENT_SECRET,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
@@ -30,23 +28,19 @@ export class FreshbooksService {
       console.error("Error initializing Freshbooks client:", error);
       if (error instanceof Error) {
         console.error("Error details:", error.message);
-        console.error("Error stack:", error.stack);
+        console.error("Stack trace:", error.stack);
       }
-      throw error; 
+      throw error;
     }
   }
 
   async getAuthUrl(): Promise<string> {
     try {
       const client = await this.ensureClient();
-      console.log("Getting authorization URL with scopes:", [
-        "user:profile:read",
-        "user:clients:read",
-        "user:projects:read",
-        "user:invoices:read",
-      ]);
+      console.log("Getting authorization URL...");
 
-      const authUrl = client.authorizeUrl([
+      // Initialize the OAuth2 flow
+      const authUrl = client.getAuthorizationUrl([
         "user:profile:read",
         "user:clients:read",
         "user:projects:read",
@@ -64,30 +58,27 @@ export class FreshbooksService {
   async handleCallback(code: string): Promise<any> {
     try {
       const client = await this.ensureClient();
-      console.log("Starting token exchange with code:", code.substring(0, 10) + "...");
+      console.log("Exchanging auth code for tokens...");
 
-      console.log("Using redirect URI:", process.env.FRESHBOOKS_REDIRECT_URI);
-
-      const tokenResponse = await client.token.exchange({
+      const tokenResponse = await client.getAccessToken({
         code,
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
       });
 
-      console.log("Token exchange response received:", {
-        hasAccessToken: !!tokenResponse.accessToken,
-        hasRefreshToken: !!tokenResponse.refreshToken,
-        expiresIn: tokenResponse.expiresIn
+      console.log("Token exchange response:", {
+        hasAccessToken: !!tokenResponse.access_token,
+        hasRefreshToken: !!tokenResponse.refresh_token,
+        expiresIn: tokenResponse.expires_in
       });
 
-      if (!tokenResponse || !tokenResponse.accessToken) {
+      if (!tokenResponse.access_token) {
         throw new Error("Failed to get access token from Freshbooks");
       }
 
-      console.log("Successfully obtained access token");
       return {
-        access_token: tokenResponse.accessToken,
-        refresh_token: tokenResponse.refreshToken,
-        expires_in: tokenResponse.expiresIn || 3600,
+        access_token: tokenResponse.access_token,
+        refresh_token: tokenResponse.refresh_token,
+        expires_in: tokenResponse.expires_in || 3600,
         token_type: "Bearer"
       };
     } catch (error) {
@@ -102,40 +93,40 @@ export class FreshbooksService {
       client.setAccessToken(accessToken);
 
       console.log("Fetching user details...");
-      const identity = await client.users.me();
+      const identity = await client.getCurrentUser();
       console.log("User response:", identity);
 
-      if (!identity.response?.result?.id) {
+      if (!identity || !identity.accountId) {
         throw new Error("Could not fetch user details");
       }
 
-      const accountId = identity.response.result.id;
+      const accountId = identity.accountId;
       console.log(`Fetching clients for account ${accountId}...`);
 
-      const { response } = await client.clients.list({
+      const clientsResponse = await client.clients.list({
         accountId: String(accountId),
         include: ["email", "organization", "phone"]
       });
 
-      console.log("Raw clients response:", response);
+      console.log("Raw clients response:", clientsResponse);
 
-      if (!response?.result?.clients) {
+      if (!clientsResponse || !clientsResponse.clients) {
         console.log("No clients found in response");
         return [];
       }
 
-      return response.result.clients.map(client => ({
+      return clientsResponse.clients.map(client => ({
         id: client.id,
         email: client.email || '',
         organization: client.organization || '',
         phoneNumber: client.phone || '',
-        status: client.vis_state || 'active'
+        status: client.visState || 'active'
       }));
     } catch (error) {
       console.error("Error fetching Freshbooks clients:", error);
       if (error instanceof Error) {
         console.error("Error details:", error.message);
-        console.error("Error stack:", error.stack);
+        console.error("Stack trace:", error.stack);
       }
       throw error;
     }
