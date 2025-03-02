@@ -99,8 +99,9 @@ export class FreshbooksService {
       }
 
       console.log("Fetching clients for business:", businessId);
+      // Update endpoint to match API documentation
       const clientsResponse = await fetch(
-        `${this.baseUrl}/accounting/account/${businessId}/clients/clients`,
+        `${this.baseUrl}/accounting/account/${businessId}/users/clients`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -118,8 +119,8 @@ export class FreshbooksService {
         id: client.id,
         email: client.email || '',
         organization: client.organization || '',
-        phoneNumber: client.phone || '',
-        status: client.vis_state || 'active'
+        phoneNumber: client.bus_phone || client.mob_phone || '',
+        status: client.vis_state === 0 ? 'active' : 'inactive'
       }));
     } catch (error) {
       console.error("Error fetching clients:", error);
@@ -147,6 +148,7 @@ export class FreshbooksService {
     }
     return businessId;
   }
+
   async syncProjects(accessToken: string) {
     try {
       const businessId = await this.getBusinessId(accessToken);
