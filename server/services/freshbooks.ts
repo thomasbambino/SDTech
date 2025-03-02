@@ -6,6 +6,11 @@ export class FreshbooksService {
 
   async getAuthUrl(): Promise<string> {
     try {
+      if (!process.env.FRESHBOOKS_CLIENT_ID || !process.env.FRESHBOOKS_CLIENT_SECRET || !process.env.FRESHBOOKS_REDIRECT_URI) {
+        console.error("Missing required Freshbooks environment variables");
+        throw new Error("Missing required Freshbooks configuration");
+      }
+
       console.log("Starting authorization URL generation with environment variables:", {
         clientId: process.env.FRESHBOOKS_CLIENT_ID?.substring(0, 5) + '...',
         redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,

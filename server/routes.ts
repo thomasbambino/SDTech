@@ -163,7 +163,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/freshbooks/callback", requireAdmin, async (req, res) => {
+  // Update the callback route to match Freshbooks configuration
+  app.get("/auth/callback", requireAdmin, async (req, res) => {
     try {
       console.log("Received Freshbooks callback");
       const code = req.query.code as string;
