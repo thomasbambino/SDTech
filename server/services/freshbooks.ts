@@ -6,6 +6,11 @@ export class FreshbooksService {
 
   async getAuthUrl(): Promise<string> {
     try {
+      console.log("Starting authorization URL generation with environment variables:", {
+        clientId: process.env.FRESHBOOKS_CLIENT_ID?.substring(0, 5) + '...',
+        redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
+      });
+
       const scopes = [
         "user:profile:read",
         "user:clients:read",
