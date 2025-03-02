@@ -2,19 +2,10 @@ import type { User } from "@shared/schema";
 
 export class FreshbooksService {
   private baseUrl = 'https://api.freshbooks.com';
-  private authUrl = 'https://auth.freshbooks.com/service/auth/oauth/authorize';
+  private authUrl = 'https://auth.freshbooks.com/oauth/authorize/';
 
   async getAuthUrl(): Promise<string> {
     try {
-      if (!process.env.FRESHBOOKS_CLIENT_ID || !process.env.FRESHBOOKS_CLIENT_SECRET || !process.env.FRESHBOOKS_REDIRECT_URI) {
-        console.error("Missing required environment variables:", {
-          hasClientId: !!process.env.FRESHBOOKS_CLIENT_ID,
-          hasClientSecret: !!process.env.FRESHBOOKS_CLIENT_SECRET,
-          hasRedirectUri: !!process.env.FRESHBOOKS_REDIRECT_URI
-        });
-        throw new Error("Missing required Freshbooks environment variables");
-      }
-
       const scopes = [
         "user:profile:read",
         "user:clients:read",
@@ -22,18 +13,12 @@ export class FreshbooksService {
         "user:invoices:read",
       ];
 
-      // Log full configuration for debugging
-      console.log("Generating Freshbooks auth URL with config:", {
-        redirectUri: process.env.FRESHBOOKS_REDIRECT_URI,
-        clientId: process.env.FRESHBOOKS_CLIENT_ID.substring(0, 5) + '...',
-        scopes
+      const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: process.env.FRESHBOOKS_CLIENT_ID!,
+        redirect_uri: process.env.FRESHBOOKS_REDIRECT_URI!,
+        scope: scopes.join(' ')
       });
-
-      const params = new URLSearchParams();
-      params.append('client_id', process.env.FRESHBOOKS_CLIENT_ID);
-      params.append('redirect_uri', process.env.FRESHBOOKS_REDIRECT_URI);
-      params.append('response_type', 'code');
-      params.append('scope', scopes.join(' '));
 
       const authUrl = `${this.authUrl}?${params.toString()}`;
       console.log("Generated authorization URL:", authUrl);
