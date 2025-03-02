@@ -1,0 +1,308 @@
+// components/FreshbooksConnect.tsx
+import React, { useState, useEffect } from 'react';
+
+interface FreshbooksConnectProps {
+  onConnected?: () => void;
+}
+
+const FreshbooksConnect: React.FC<FreshbooksConnectProps> = ({ onConnected }) => {
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+
+  // Check if connected on component mount
+  useEffect(() => {
+    // Parse URL to see if we came from a successful callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('connected') === 'freshbooks') {
+      setIsConnected(true);
+      if (onConnected) {
+        onConnected();
+      }
+    }
+    
+    if (urlParams.get('error')?.includes('freshbooks')) {
+      setError('Failed to connect to Freshbooks. Please try again.');
+    }
+    
+    // You could also check for active tokens in cookies/storage here
+    checkConnectionStatus();
+  }, [onConnected]);
+
+  const checkConnectionStatus = async () => {
+    try {
+      // Make a simple API call to check if we have valid tokens
+      const response = await fetch('/api/freshbooks/connection-status');
+      const data = await response.json();
+      setIsConnected(data.isConnected);
+    } catch (error) {
+      console.error('Error checking Freshbooks connection:', error);
+      setIsConnected(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/freshbooks/auth');
+      const data = await response.json();
+      
+      if (data.authUrl) {
+        // Redirect to Freshbooks authorization page
+        window.location.href = data.authUrl;
+      } else {
+        throw new Error('Failed to generate authorization URL');
+      }
+    } catch (error) {
+      console.error('Error initiating Freshbooks connection:', error);
+      setError('Failed to connect to Freshbooks. Please try again.');
+      setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await fetch('/api/freshbooks/disconnect', { method: 'POST' });
+      setIsConnected(false);
+    } catch (error) {
+      console.error('Error disconnecting from Freshbooks:', error);
+      setError('Failed to disconnect from Freshbooks.');
+    }
+  };
+
+  return (
+    <div className="freshbooks-connect">
+      <h2>Freshbooks Integration</h2>
+      
+      {error && (
+        <div className="error-message">
+          {error}
+        </div>
+      )}
+      
+      {isConnected ? (
+        <div>
+          <div className="success-message">
+            ✓ Connected to Freshbooks
+          </div>
+          <button 
+            onClick={handleDisconnect}
+            className="disconnect-button"
+          >
+            Disconnect from Freshbooks
+          </button>
+        </div>
+      ) : (
+        <button 
+          onClick={handleConnect}
+          disabled={isConnecting}
+          className="connect-button"
+        >
+          {isConnecting ? 'Connecting...' : 'Connect to Freshbooks'}
+        </button>
+      )}
+    </div>
+  );
+};
+
+export default FreshbooksConnect;
+
+// components/FreshbooksClients.tsx
+import React, { useState, useEffect } from 'react';
+
+interface Client {
+  id: string;
+  email: string;
+  organization: string;
+  phoneNumber: string;
+  status: string;
+}
+
+const FreshbooksClients: React.FC = () => {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  const fetchClients = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/freshbooks/clients');
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Not authenticated with Freshbooks');
+        } else {
+          throw new Error(`Failed to fetch clients: ${response.status}`);
+        }
+      }
+      
+      const data = await response.json();
+      setClients(data.clients || []);
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch clients');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return <div>Loading clients...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="error-container">
+        <p>Error: {error}</p>
+        {error.includes('Not authenticated') && (
+          <p>Please connect to Freshbooks to view clients.</p>
+        )}
+        <button onClick={fetchClients}>Try Again</button>
+      </div>
+    );
+  }
+
+  if (clients.length === 0) {
+    return <div>No clients found in your Freshbooks account.</div>;
+  }
+
+  return (
+    <div className="clients-container">
+      <h2>Freshbooks Clients</h2>
+      <table className="clients-table">
+        <thead>
+          <tr>
+            <th>Organization</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {clients.map(client => (
+            <tr key={client.id}>
+              <td>{client.organization || 'N/A'}</td>
+              <td>{client.email || 'N/A'}</td>
+              <td>{client.phoneNumber || 'N/A'}</td>
+              <td>{client.status}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+export default FreshbooksClients;
+
+// components/FreshbooksInvoices.tsx
+import React, { useState, useEffect } from 'react';
+
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  amount?: {
+    amount: string;
+    code: string;
+  };
+  create_date?: string;
+  due_date?: string;
+  status?: string;
+}
+
+const FreshbooksInvoices: React.FC = () => {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, []);
+
+  const fetchInvoices = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/freshbooks/invoices');
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Not authenticated with Freshbooks');
+        } else {
+          throw new Error(`Failed to fetch invoices: ${response.status}`);
+        }
+      }
+      
+      const data = await response.json();
+      setInvoices(data.invoices || []);
+    } catch (error) {
+      console.error('Error fetching invoices:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch invoices');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return <div>Loading invoices...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="error-container">
+        <p>Error: {error}</p>
+        {error.includes('Not authenticated') && (
+          <p>Please connect to Freshbooks to view invoices.</p>
+        )}
+        <button onClick={fetchInvoices}>Try Again</button>
+      </div>
+    );
+  }
+
+  if (invoices.length === 0) {
+    return <div>No invoices found in your Freshbooks account.</div>;
+  }
+
+  return (
+    <div className="invoices-container">
+      <h2>Freshbooks Invoices</h2>
+      <table className="invoices-table">
+        <thead>
+          <tr>
+            <th>Invoice #</th>
+            <th>Date</th>
+            <th>Due Date</th>
+            <th>Amount</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoices.map(invoice => (
+            <tr key={invoice.id}>
+              <td>{invoice.invoice_number}</td>
+              <td>{invoice.create_date || 'N/A'}</td>
+              <td>{invoice.due_date || 'N/A'}</td>
+              <td>
+                {invoice.amount 
+                  ? `${invoice.amount.amount} ${invoice.amount.code}`
+                  : 'N/A'}
+              </td>
+              <td>{invoice.status || 'N/A'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+export default FreshbooksInvoices;

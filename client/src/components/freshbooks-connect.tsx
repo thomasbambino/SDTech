@@ -1,26 +1,55 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 
 export function FreshbooksConnect() {
   const { toast } = useToast();
   const [location] = useLocation();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
 
-  const { data: authData, isLoading: isAuthLoading, error: authError } = useQuery({
+  // Query for auth URL and connection status
+  const { data: authData, isLoading: isAuthLoading } = useQuery({
     queryKey: ["/api/freshbooks/auth"],
   });
 
+  // Disconnect mutation
+  const disconnectMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/freshbooks/disconnect");
+      return res.json();
+    },
+    onSuccess: () => {
+      setIsConnected(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/freshbooks/auth"] });
+      toast({
+        title: "Disconnected",
+        description: "Successfully disconnected from Freshbooks.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Sync mutation
   const syncMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/freshbooks/sync");
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/freshbooks/clients"] });
       toast({
         title: "Sync Successful",
         description: "Your Freshbooks data has been synchronized.",
@@ -35,46 +64,44 @@ export function FreshbooksConnect() {
     },
   });
 
-  // Handle connect button click
-  const handleConnect = () => {
-    if (authData?.authUrl) {
-      window.open(authData.authUrl, '_blank', 'noopener,noreferrer');
+  // Check connection status on mount and URL changes
+  useEffect(() => {
+    checkConnectionStatus();
+
+    // Check URL parameters for connection status
+    const params = new URLSearchParams(location.split("?")[1]);
+    if (params.get("freshbooks") === "connected") {
+      setIsConnected(true);
+      toast({
+        title: "Connected",
+        description: "Successfully connected to Freshbooks.",
+      });
+    } else if (params.get("freshbooks") === "error") {
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Freshbooks. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [location, toast]);
+
+  const checkConnectionStatus = async () => {
+    try {
+      const response = await fetch("/api/freshbooks/connection-status");
+      const data = await response.json();
+      setIsConnected(data.isConnected);
+    } catch (error) {
+      console.error("Error checking Freshbooks connection:", error);
+      setIsConnected(false);
     }
   };
 
-  // Check if we just completed Freshbooks connection
-  const params = new URLSearchParams(location.split("?")[1]);
-  const freshbooksStatus = params.get("freshbooks");
+  const handleConnect = () => {
+    if (!authData?.authUrl) return;
 
-  if (freshbooksStatus === "connected") {
-    toast({
-      title: "Freshbooks Connected",
-      description: "Your Freshbooks account has been successfully connected.",
-    });
-  } else if (freshbooksStatus === "error") {
-    toast({
-      title: "Connection Failed",
-      description: "Failed to connect to Freshbooks. Please try again.",
-      variant: "destructive",
-    });
-  }
-
-  if (authError) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Freshbooks Integration</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert variant="destructive">
-            <AlertDescription>
-              Failed to initialize Freshbooks integration. Please try again later.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
+    setIsConnecting(true);
+    window.open(authData.authUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <Card>
@@ -88,25 +115,53 @@ export function FreshbooksConnect() {
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Loading...
             </Button>
+          ) : isConnected ? (
+            <>
+              <Button 
+                onClick={() => disconnectMutation.mutate()}
+                variant="outline"
+                disabled={disconnectMutation.isPending}
+              >
+                {disconnectMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Disconnecting...
+                  </>
+                ) : (
+                  'Disconnect Freshbooks'
+                )}
+              </Button>
+              <Button 
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+              >
+                {syncMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  'Sync Now'
+                )}
+              </Button>
+            </>
           ) : (
-            <Button onClick={handleConnect} variant="outline">
-              Connect Freshbooks
+            <Button 
+              onClick={handleConnect}
+              variant="outline"
+              disabled={isConnecting || !authData?.authUrl}
+            >
+              {isConnecting ? "Connecting..." : "Connect Freshbooks"}
             </Button>
           )}
-          <Button 
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending || !authData?.authUrl}
-          >
-            {syncMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              'Sync Now'
-            )}
-          </Button>
         </div>
+        {isConnected && (
+          <Alert>
+            <AlertDescription>
+              ✓ Connected to Freshbooks
+            </AlertDescription>
+          </Alert>
+        )}
       </CardContent>
     </Card>
   );

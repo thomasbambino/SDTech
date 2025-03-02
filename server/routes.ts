@@ -230,6 +230,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add this endpoint with the other Freshbooks routes
+  app.get("/api/freshbooks/connection-status", requireAdmin, async (req, res) => {
+    try {
+      const isConnected = !!req.session.freshbooksTokens?.access_token;
+      res.json({ isConnected });
+    } catch (error) {
+      console.error("Error checking Freshbooks connection status:", error);
+      res.status(500).json({
+        error: "Failed to check connection status",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  app.post("/api/freshbooks/disconnect", requireAdmin, async (req, res) => {
+    try {
+      // If we have tokens, try to revoke them with Freshbooks
+      if (req.session.freshbooksTokens) {
+        const response = await fetch('https://api.freshbooks.com/auth/oauth/revoke', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            client_id: process.env.FRESHBOOKS_CLIENT_ID,
+            client_secret: process.env.FRESHBOOKS_CLIENT_SECRET,
+            token: req.session.freshbooksTokens.access_token
+          })
+        });
+
+        if (!response.ok) {
+          console.error("Failed to revoke token:", await response.text());
+        }
+      }
+
+      // Clear tokens from session regardless of revoke success
+      delete req.session.freshbooksTokens;
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve(true);
+        });
+      });
+
+      res.json({ message: "Disconnected successfully" });
+    } catch (error) {
+      console.error("Error disconnecting from Freshbooks:", error);
+      res.status(500).json({
+        error: "Failed to disconnect",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/projects/recent-invoices", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
