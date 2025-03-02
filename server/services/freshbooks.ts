@@ -100,7 +100,7 @@ export class FreshbooksService {
 
       console.log("Fetching clients for business:", businessId);
       const clientsResponse = await fetch(
-        `${this.baseUrl}/accounting/account/${businessId}/clients`,
+        `${this.baseUrl}/accounting/account/${businessId}/clients/clients`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -127,6 +127,26 @@ export class FreshbooksService {
     }
   }
 
+  private async getBusinessId(accessToken: string) {
+    const meResponse = await fetch(`${this.baseUrl}/auth/api/v1/users/me`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!meResponse.ok) {
+      throw new Error(`Failed to get user details: ${meResponse.status}`);
+    }
+
+    const meData = await meResponse.json();
+    const businessId = meData.response.business_memberships?.[0]?.business.id;
+
+    if (!businessId) {
+      throw new Error("No business ID found");
+    }
+    return businessId;
+  }
   async syncProjects(accessToken: string) {
     try {
       const businessId = await this.getBusinessId(accessToken);
@@ -177,28 +197,6 @@ export class FreshbooksService {
       console.error("Error syncing Freshbooks invoices:", error);
       return [];
     }
-  }
-
-
-  private async getBusinessId(accessToken: string) {
-    const meResponse = await fetch(`${this.baseUrl}/auth/api/v1/users/me`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!meResponse.ok) {
-      throw new Error(`Failed to get user details: ${meResponse.status}`);
-    }
-
-    const meData = await meResponse.json();
-    const businessId = meData.response.business_memberships?.[0]?.business.id;
-
-    if (!businessId) {
-      throw new Error("No business ID found");
-    }
-    return businessId;
   }
 }
 
