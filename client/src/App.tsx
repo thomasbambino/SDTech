@@ -14,6 +14,7 @@ import CustomerInquiry from "@/pages/inquiry";
 import ChangePassword from "@/pages/change-password";
 import Clients from "@/pages/clients";
 import { ProtectedRoute } from "./lib/protected-route";
+import OAuthCallback from "@/pages/oauth-callback";
 
 function AdminRoute(props: Parameters<typeof ProtectedRoute>[0]) {
   return (
@@ -36,6 +37,7 @@ function Router() {
       <ProtectedRoute path="/invoices" component={Invoices} />
       <AdminRoute path="/admin/users" component={UserManagement} />
       <AdminRoute path="/clients" component={Clients} />
+      <Route path="/auth/callback" component={OAuthCallback} />
       <Route component={NotFound} />
     </Switch>
   );
