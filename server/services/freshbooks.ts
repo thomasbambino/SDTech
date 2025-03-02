@@ -100,7 +100,7 @@ export class FreshbooksService {
 
       console.log("Fetching clients for business:", businessId);
       const clientsResponse = await fetch(
-        `${this.baseUrl}/accounting/account/${businessId}/users/clients`,
+        `${this.baseUrl}/accounting/account/${businessId}/clients`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -129,10 +129,10 @@ export class FreshbooksService {
 
   async syncProjects(accessToken: string) {
     try {
-      const businessId = await this.getBusinessId(accessToken); //Get business ID
+      const businessId = await this.getBusinessId(accessToken);
       console.log(`Fetching projects for business ${businessId}...`);
       const projectsResponse = await fetch(
-        `${this.baseUrl}/accounting/account/${businessId}/projects`,
+        `${this.baseUrl}/accounting/account/${businessId}/projects/projects`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -155,10 +155,10 @@ export class FreshbooksService {
 
   async syncInvoices(accessToken: string) {
     try {
-      const businessId = await this.getBusinessId(accessToken); //Get business ID
+      const businessId = await this.getBusinessId(accessToken);
       console.log(`Fetching invoices for business ${businessId}...`);
       const invoicesResponse = await fetch(
-        `${this.baseUrl}/accounting/account/${businessId}/invoices`,
+        `${this.baseUrl}/accounting/account/${businessId}/invoices/invoices`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
