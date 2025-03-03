@@ -7,6 +7,7 @@ import { Loader2, Mail, Phone, MapPin, Calendar } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FreshbooksConnect } from "@/components/freshbooks-connect";
 import { CreateClientDialog } from "@/components/create-client-dialog";
+import { EditClientDialog } from "@/components/edit-client-dialog";
 
 interface FreshbooksClient {
   id: string;
@@ -61,40 +62,41 @@ export default function ClientsPage() {
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
                     <div className="space-y-4">
-                      <div>
+                      <div className="flex items-center gap-2">
                         <h2 className="text-xl font-semibold mb-1">{client.name}</h2>
-                        {client.organization && (
-                          <p className="text-sm text-muted-foreground">{client.organization}</p>
-                        )}
+                        <EditClientDialog client={client} />
                       </div>
-                      <div className="space-y-2 text-sm text-muted-foreground">
-                        {client.email && (
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4" />
-                            <span>{client.email}</span>
-                          </div>
-                        )}
-                        {client.phone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4" />
-                            <span>{client.phone}</span>
-                          </div>
-                        )}
-                        {client.address && (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            <span>{client.address}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
-                          <span>Created: {client.createdDate}</span>
-                        </div>
-                      </div>
+                      {client.organization && (
+                        <p className="text-sm text-muted-foreground">{client.organization}</p>
+                      )}
                     </div>
                     <Badge variant={client.status === 'Active' ? 'default' : 'secondary'}>
                       {client.status}
                     </Badge>
+                  </div>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    {client.email && (
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4" />
+                        <span>{client.email}</span>
+                      </div>
+                    )}
+                    {client.phone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4" />
+                        <span>{client.phone}</span>
+                      </div>
+                    )}
+                    {client.address && (
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        <span>{client.address}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>Created: {client.createdDate}</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

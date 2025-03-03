@@ -267,6 +267,36 @@ export class FreshbooksService {
       throw error;
     }
   }
+  // Add this method to the FreshbooksService class
+  async updateClient(accessToken: string, clientId: string, clientData: any) {
+    try {
+      const accountId = await this.getBusinessId(accessToken);
+      console.log(`Updating client ${clientId} for account:`, accountId);
+
+      const response = await fetch(
+        `${this.baseUrl}/accounting/account/${accountId}/users/clients/${clientId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ client: clientData })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to update client: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return formatClientData([data.response.result.client])[0];
+    } catch (error) {
+      console.error("Error updating client:", error);
+      throw error;
+    }
+  }
+
 }
 
 export const freshbooksService = new FreshbooksService();
