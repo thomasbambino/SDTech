@@ -9,6 +9,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { Link } from "wouter";
+import { CreateProjectDialog } from "@/components/create-project-dialog";
 
 export default function Projects() {
   const { data: projects, isLoading } = useQuery<Project[]>({
@@ -19,7 +23,10 @@ export default function Projects() {
     <div className="min-h-screen bg-background">
       <NavBar />
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">Projects</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">Projects</h1>
+          <CreateProjectDialog />
+        </div>
 
         {isLoading ? (
           <div>Loading projects...</div>
@@ -32,7 +39,7 @@ export default function Projects() {
                     <div>
                       <CardTitle>{project.title}</CardTitle>
                       <CardDescription>
-                        Created{" "}
+                        Created {" "}
                         {new Date(project.createdAt).toLocaleDateString()}
                       </CardDescription>
                     </div>
@@ -40,7 +47,14 @@ export default function Projects() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground">{project.description}</p>
+                  <p className="text-muted-foreground line-clamp-3 mb-4">
+                    {project.description}
+                  </p>
+                  <Button variant="outline" asChild className="w-full">
+                    <Link href={`/projects/${project.id}`}>
+                      View Details
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             ))}

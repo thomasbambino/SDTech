@@ -180,18 +180,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Create initial project from inquiry details
         if (user.inquiryDetails) {
-          const project = await storage.createProject({
-            title: "Initial Inquiry Project",
-            description: user.inquiryDetails,
-            clientId: user.id,
-            status: "pending"
-          });
+          try {
+            console.log("Creating initial project from inquiry details");
+            const project = await storage.createProject({
+              title: "Initial Inquiry Project",
+              description: user.inquiryDetails,
+              clientId: user.id,
+              status: "pending"
+            });
+            console.log("Created project:", project);
+          } catch (projectError) {
+            console.error("Failed to create project:", projectError);
+            throw new Error("Failed to create project from inquiry");
+          }
         }
 
         // Update user role to customer
         await storage.updateUserRole(userId, "customer");
 
-        res.json({ message: "Inquiry approved and client created successfully" });
+        res.json({ 
+          message: "Inquiry approved and client created successfully",
+          details: "Created Freshbooks client and initial project from inquiry details"
+        });
       } catch (freshbooksError) {
         console.error("Freshbooks error details:", freshbooksError);
         throw new Error("Failed to create Freshbooks client. Please try again later.");

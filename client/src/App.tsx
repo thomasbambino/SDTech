@@ -17,6 +17,7 @@ import ChangePassword from "@/pages/change-password";
 import Clients from "@/pages/clients";
 import { ProtectedRoute } from "./lib/protected-route";
 import OAuthCallback from "@/pages/oauth-callback";
+import ProjectDetails from "@/pages/project-details"; // Added import
 
 function AdminRoute(props: Parameters<typeof ProtectedRoute>[0]) {
   return (
@@ -36,6 +37,7 @@ function Router() {
       <ProtectedRoute path="/change-password" component={ChangePassword} />
       <ProtectedRoute path="/dashboard" component={Dashboard} />
       <ProtectedRoute path="/projects" component={Projects} />
+      <ProtectedRoute path="/projects/:id" component={ProjectDetails} /> {/* Added route */}
       <ProtectedRoute path="/invoices" component={Invoices} />
       <AdminRoute path="/admin/users" component={UserManagement} />
       <AdminRoute path="/admin/inquiries" component={InquiriesPage} />
