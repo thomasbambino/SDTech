@@ -349,13 +349,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Freshbooks Integration (Admin only)
-  app.get("/api/freshbooks/connection-status", requireAdmin, async (req, res) => {
+  app.get("/api/freshbooks/connection-status", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ 
+          isConnected: false,
+          error: "Authentication required"
+        });
+      }
+
       // Check if we have tokens in session
       const tokens = req.session.freshbooksTokens;
       
       if (!tokens) {
-        console.log("No Freshbooks tokens found in session");
         return res.json({ isConnected: false });
       }
 
@@ -376,7 +382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error checking Freshbooks connection status:", error);
-      res.json({ 
+      res.status(500).json({ 
         isConnected: false,
         error: error instanceof Error ? error.message : "Failed to check connection status"
       });
@@ -825,7 +831,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const authenticatedUser = req.user as Express.User;
 
-      // Verify Freshbooks connection first
+      // Verify Freshbooks connection
       const tokens = req.session.freshbooksTokens;
       if (!tokens) {
         return res.status(401).json({
@@ -834,7 +840,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get the account ID
+      let projectsResponse;
+
+      // Get the account ID first
       const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
         headers: {
           'Authorization': `Bearer ${tokens.access_token}`,
@@ -853,10 +861,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("No account ID found in user profile");
       }
 
-      // For admin users, fetch all projects
+      // Different endpoints for admin and customer
       if (authenticatedUser.role === 'admin') {
-        const projectsResponse = await fetch(
-          `https://api.freshbooks.com/accounting/account/${accountId}/projects`,
+        projectsResponse = await fetch(
+          `https://api.freshbooks.com/accounting/account/${accountId}/projects/`,
           {
             headers: {
               'Authorization': `Bearer ${tokens.access_token}`,
@@ -864,33 +872,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         );
-
-        if (!projectsResponse.ok) {
-          throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
-        }
-
-        const projectsData = await projectsResponse.json();
-        return res.json(projectsData.response.result.projects.map(project => ({
-          id: project.id.toString(),
-          title: project.title,
-          description: project.description,
-          status: project.active ? 'Active' : 'Inactive',
-          dueDate: project.due_date,
-          budget: project.budget,
-          fixedPrice: project.fixed_price,
-          createdAt: project.created_at,
-          clientId: project.client_id?.toString(),
-          billingMethod: project.billing_method,
-          projectType: project.project_type,
-          billedAmount: project.billed_amount,
-          billedStatus: project.billed_status,
-          services: project.services
-        })));
-      }
-
-      // For customers, fetch only their projects
-      if (authenticatedUser.role === 'customer' && authenticatedUser.freshbooksId) {
-        const clientProjectsResponse = await fetch(
+      } else if (authenticatedUser.role === 'customer' && authenticatedUser.freshbooksId) {
+        projectsResponse = await fetch(
           `https://api.freshbooks.com/accounting/account/${accountId}/projects?client_id=${authenticatedUser.freshbooksId}`,
           {
             headers: {
@@ -899,32 +882,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         );
-
-        if (!clientProjectsResponse.ok) {
-          throw new Error(`Failed to fetch client projects: ${clientProjectsResponse.status}`);
-        }
-
-        const projectsData = await clientProjectsResponse.json();
-        return res.json(projectsData.response.result.projects.map(project => ({
-          id: project.id.toString(),
-          title: project.title,
-          description: project.description,
-          status: project.active ? 'Active' : 'Inactive',
-          dueDate: project.due_date,
-          budget: project.budget,
-          fixedPrice: project.fixed_price,
-          createdAt: project.created_at,
-          clientId: project.client_id?.toString(),
-          billingMethod: project.billing_method,
-          projectType: project.project_type,
-          billedAmount: project.billed_amount,
-          billedStatus: project.billed_status,
-          services: project.services
-        })));
+      } else {
+        return res.json([]); // Return empty array for other cases
       }
 
-      // For other roles or users without Freshbooks ID
-      return res.json([]);
+      if (!projectsResponse || !projectsResponse.ok) {
+        throw new Error(`Failed to fetch projects: ${projectsResponse?.status}`);
+      }
+
+      const projectsData = await projectsResponse.json();
+      
+      const formattedProjects = projectsData.response.result.projects.map(project => ({
+        id: project.id.toString(),
+        title: project.title,
+        description: project.description,
+        status: project.active ? 'Active' : 'Inactive',
+        dueDate: project.due_date,
+        budget: project.budget,
+        fixedPrice: project.fixed_price,
+        createdAt: project.created_at,
+        clientId: project.client_id?.toString(),
+        billingMethod: project.billing_method,
+        projectType: project.project_type,
+        billedAmount: project.billed_amount,
+        billedStatus: project.billed_status,
+        services: project.services
+      }));
+
+      res.json(formattedProjects);
 
     } catch (error) {
       console.error("Error fetching projects:", error);
