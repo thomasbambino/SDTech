@@ -25,7 +25,7 @@ export default function UserManagement() {
   }
 
   const { data: users, isLoading } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: ["/api/users/admins"], // Updated endpoint to only fetch admin users
   });
 
   const roleUpdateMutation = useMutation({
@@ -34,7 +34,7 @@ export default function UserManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/admins"] });
       toast({
         title: "Success",
         description: "User role updated successfully",
@@ -77,40 +77,24 @@ export default function UserManagement() {
     <div className="min-h-screen bg-background">
       <NavBar />
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">User Management</h1>
+        <h1 className="text-3xl font-bold mb-8">Admin Management</h1>
         <div className="grid gap-4">
-          {users?.map((user) => (
-            <Card key={user.id}>
+          {users?.filter(u => u.role === 'admin').map((adminUser) => (
+            <Card key={adminUser.id}>
               <CardContent className="flex items-center justify-between p-6">
                 <div>
-                  <div className="font-semibold">{user.username}</div>
+                  <div className="font-semibold">{adminUser.username}</div>
                   <div className="text-sm text-muted-foreground mb-2">
-                    {user.companyName}
+                    {adminUser.companyName}
                   </div>
-                  <Badge variant={user.isTemporaryPassword ? "secondary" : "outline"}>
-                    {user.isTemporaryPassword ? "Temp Password" : "Active"}
+                  <Badge variant={adminUser.isTemporaryPassword ? "secondary" : "outline"}>
+                    {adminUser.isTemporaryPassword ? "Temp Password" : "Active"}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-4">
-                  <Select
-                    value={user.role}
-                    onValueChange={(role) =>
-                      roleUpdateMutation.mutate({ userId: user.id, role })
-                    }
-                    disabled={roleUpdateMutation.isPending}
-                  >
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="customer">Customer</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
                   <Button
                     variant="outline"
-                    onClick={() => passwordResetMutation.mutate(user.id)}
+                    onClick={() => passwordResetMutation.mutate(adminUser.id)}
                     disabled={passwordResetMutation.isPending}
                   >
                     Reset Password

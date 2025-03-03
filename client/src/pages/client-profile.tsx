@@ -1,14 +1,17 @@
 import { NavBar } from "@/components/nav-bar";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Mail, Phone, MapPin, Calendar, DollarSign } from "lucide-react";
+import { Loader2, Mail, Phone, MapPin, Calendar, DollarSign, Key } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EditClientDialog } from "@/components/edit-client-dialog";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { EditProjectDialog } from "@/components/edit-project-dialog";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface Project {
   id: string;
@@ -44,7 +47,32 @@ interface FreshbooksClient {
 
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
-  console.log("Loading client profile for ID:", id);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const isAdmin = user?.role === 'admin';
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/freshbooks/clients/${id}/reset-password`
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password Reset Email Sent",
+        description: "A temporary password has been sent to the client's email.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", id],
@@ -106,7 +134,6 @@ export default function ClientProfile() {
       <NavBar />
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Client Details - Left Third */}
           <div className="lg:col-span-1">
             <Card>
               <CardContent className="p-6">
@@ -117,7 +144,9 @@ export default function ClientProfile() {
                       <p className="text-sm text-muted-foreground">{client.organization}</p>
                     )}
                   </div>
-                  <EditClientDialog client={client} />
+                  <div className="flex gap-2">
+                    {isAdmin && <EditClientDialog client={client} />}
+                  </div>
                 </div>
                 <div className="space-y-3">
                   {client.email && (
@@ -147,18 +176,26 @@ export default function ClientProfile() {
                       {client.status}
                     </Badge>
                   </div>
+                  {isAdmin && (
+                    <Button
+                      className="w-full mt-4"
+                      variant="outline"
+                      onClick={() => resetPasswordMutation.mutate()}
+                      disabled={resetPasswordMutation.isPending}
+                    >
+                      <Key className="h-4 w-4 mr-2" />
+                      Reset Client Password
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
           </div>
-
-          {/* Projects - Right Two Thirds */}
           <div className="lg:col-span-2">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-semibold">Projects</h2>
               <CreateProjectDialog clientId={client.id} />
             </div>
-
             <div className="space-y-4">
               {isLoadingProjects ? (
                 <div className="flex items-center justify-center h-32">

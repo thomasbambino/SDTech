@@ -7,6 +7,9 @@ import { freshbooksService } from "./services/freshbooks";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
 import { APIClient } from '@freshbooks/api';
+import passport from "passport";
+import type { User } from "@shared/schema";
+import type { UploadedFile } from "express-fileupload";
 
 const scryptAsync = promisify(scrypt);
 
@@ -95,6 +98,29 @@ const formatDate = (dateString: string | null | undefined, timezone: string = 'A
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   await createInitialAdminUser();
+
+  // Update login route to include password status
+  app.post("/api/login", passport.authenticate("local"), async (req, res) => {
+    try {
+      // Type assertion since we know req.user exists after authentication
+      const authenticatedUser = req.user as Express.User;
+      const user = await storage.getUser(authenticatedUser.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json({
+        ...user,
+        requiresPasswordChange: user.isTemporaryPassword
+      });
+    } catch (error) {
+      console.error("Error in login:", error);
+      res.status(500).json({
+        error: "Failed to process login",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   // Customer Inquiry Form
   app.post("/api/inquiries", async (req, res) => {
@@ -303,11 +329,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
+      const authenticatedUser = req.user as Express.User;
       const hashedPassword = await storage.hashPassword(newPassword);
-      await storage.updateUserPassword(req.user.id, hashedPassword, false);
+      await storage.updateUserPassword(authenticatedUser.id, hashedPassword, false);
       res.json({ message: "Password updated successfully" });
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -597,6 +624,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(users);
   });
 
+  // Add new client password reset endpoint
+  app.post("/api/freshbooks/clients/:id/reset-password", requireAdmin, async (req, res) => {
+    try {
+      // Generate a temporary password
+      const tempPassword = generateTemporaryPassword();
+      const hashedPassword = await storage.hashPassword(tempPassword);
+
+      // Get the client's user account
+      const client = await storage.getUserByFreshbooksId(req.params.id);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      // Update the user's password
+      await storage.updateUserPassword(client.id, hashedPassword, true);
+
+      // TODO: In production, send email to client.email with tempPassword
+      // For development, return the temporary password in response
+      res.json({
+        message: "Password reset successful. A temporary password has been sent to the client's email.",
+        tempPassword // Only included in development
+      });
+    } catch (error) {
+      console.error("Error resetting client password:", error);
+      res.status(500).json({
+        error: "Failed to reset password",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Add endpoint to check if user needs to change password
+  app.get("/api/user/password-status", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    try {
+      const authenticatedUser = req.user as Express.User;
+      const user = await storage.getUser(authenticatedUser.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.json({
+        requiresChange: user.isTemporaryPassword,
+        lastChanged: user.lastPasswordChange
+      });
+    } catch (error) {
+      console.error("Error checking password status:", error);
+      res.status(500).json({
+        error: "Failed to check password status",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Add this new endpoint before the other project-related routes
   app.get("/api/freshbooks/projects", async (req, res) => {
     try {
@@ -776,10 +860,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
 
+      const authenticatedUser = req.user as Express.User;
       const note = await storage.createProjectNote({
         projectId: project.id,
         content: req.body.content,
-        createdBy: req.user.id
+        createdBy: authenticatedUser.id
       });
       res.status(201).json(note);
     } catch (error) {
@@ -896,7 +981,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No file uploaded" });
       }
 
-      const file = req.files.file;
+      const file = req.files.file as UploadedFile;
+      const authenticatedUser = req.user as Express.User;
 
       const document = await storage.createDocument({
         projectId: project.id,
@@ -904,7 +990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content: file.data.toString('base64'),
         fileSize: file.size,
         fileType: file.mimetype,
-        uploadedBy: req.user.id
+        uploadedBy: authenticatedUser.id
       });
 
       res.status(201).json(document);

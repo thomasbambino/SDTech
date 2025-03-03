@@ -51,6 +51,7 @@ export interface IStorage {
   createDocument(document: InsertDocument): Promise<Document>;
 
   sessionStore: session.Store;
+  getUserByFreshbooksId(freshbooksId: string): Promise<User | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -208,6 +209,18 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return newDocument;
+  }
+  async getUserByFreshbooksId(freshbooksId: string): Promise<User | undefined> {
+    try {
+      const results = await db
+        .select()
+        .from(users)
+        .where(eq(users.freshbooksId, freshbooksId));
+      return results[0];
+    } catch (error) {
+      console.error('Error in getUserByFreshbooksId:', error);
+      return undefined;
+    }
   }
 }
 
