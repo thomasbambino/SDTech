@@ -588,6 +588,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this new endpoint before the projects routes
+  app.get("/api/clients", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    // Get all users with role "customer"
+    const users = await storage.getUsersByRole("customer");
+    res.json(users);
+  });
+
+  // Add this endpoint before the other project-related routes
+  app.get("/api/freshbooks/projects", async (req, res) => {
+    try {
+      const tokens = req.session.freshbooksTokens;
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the business ID from user profile
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      console.log("User profile data:", meData);
+
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+
+      if (!businessId) {
+        throw new Error("No business ID found in user profile");
+      }
+
+      console.log("Using business ID:", businessId);
+
+      // Fetch all projects using the correct endpoint
+      const projectsResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/projects`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`
+          }
+        }
+      );
+
+      if (!projectsResponse.ok) {
+        const errorText = await projectsResponse.text();
+        console.error("Projects API error response:", errorText);
+        throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
+      }
+
+      const projectsData = await projectsResponse.json();
+      console.log("Raw projects response:", JSON.stringify(projectsData, null, 2));
+
+      // Check if we have the expected response structure
+      if (!projectsData.response?.result?.projects) {
+        console.log("No projects found in response");
+        return res.json([]);
+      }
+
+      // Format the projects data
+      const formattedProjects = projectsData.response.result.projects.map(project => {
+        console.log("Processing project:", project);
+        return {
+          id: project.id.toString(),
+          title: project.title || 'Untitled Project',
+          description: project.description || '',
+          status: project.complete ? 'Completed' : 'Active',
+          dueDate: project.due_date,
+          budget: project.budget,
+          fixedPrice: project.fixed_price,
+          createdAt: new Date(project.created_at * 1000).toISOString(),
+          clientId: project.client_id.toString()
+        };
+      });
+
+      console.log("Formatted projects:", formattedProjects);
+      res.json(formattedProjects);
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({
+        error: "Failed to fetch projects",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/freshbooks/connection-status", requireAdmin, async (req, res) => {
     try {
       const isConnected = !!req.session.freshbooksTokens?.access_token;
@@ -714,92 +808,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(users);
   });
 
-  // Projects
-  app.get("/api/projects", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    const projects = await storage.getProjects(req.user.id);
-    res.json(projects);
-  });
-
-  app.get("/api/projects/:id", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    const projectId = validateId(req.params.id);
-    if (projectId === null) return res.status(400).send("Invalid project ID");
-
-    const project = await storage.getProject(projectId);
-    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
-    res.json(project);
-  });
-
-  app.post("/api/projects", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    const data = insertProjectSchema.parse(req.body);
-    const project = await storage.createProject({
-      ...data,
-      clientId: req.user.id,
-    });
-    res.status(201).json(project);
-  });
-
-  // Invoices
-  app.get("/api/projects/:projectId/invoices", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    const projectId = validateId(req.params.projectId);
-    if (projectId === null) return res.status(400).send("Invalid project ID");
-
-    const project = await storage.getProject(projectId);
-    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
-    const invoices = await storage.getInvoices(project.id);
-    res.json(invoices);
-  });
-
-  app.post("/api/projects/:projectId/invoices", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    const projectId = validateId(req.params.projectId);
-    if (projectId === null) return res.status(400).send("Invalid project ID");
-
-    const project = await storage.getProject(projectId);
-    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
-    const data = insertInvoiceSchema.parse(req.body);
-    const invoice = await storage.createInvoice({
-      ...data,
-      projectId: project.id,
-    });
-    res.status(201).json(invoice);
-  });
-
-  // Documents
-  app.get("/api/projects/:projectId/documents", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    const projectId = validateId(req.params.projectId);
-    if (projectId === null) return res.status(400).send("Invalid project ID");
-
-    const project = await storage.getProject(projectId);
-    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
-    const documents = await storage.getDocuments(project.id);
-    res.json(documents);
-  });
-
-  app.post("/api/projects/:projectId/documents", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    const projectId = validateId(req.params.projectId);
-    if (projectId === null) return res.status(400).send("Invalid project ID");
-
-    const project = await storage.getProject(projectId);
-    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
-    const data = insertDocumentSchema.parse(req.body);
-    const document = await storage.createDocument({
-      ...data,
-      projectId: project.id,
-    });
-    res.status(201).json(document);
-  });
-
   // Add this debug endpoint with the other Freshbooks routes
   app.get("/api/freshbooks/debug/clients", requireAdmin, async (req, res) => {
     try {
@@ -858,7 +866,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update the projects endpoint with correct Freshbooks API structure
   app.get("/api/freshbooks/clients/:id/projects", async (req, res) => {
     try {
       console.log("Fetching projects for client ID:", req.params.id);
