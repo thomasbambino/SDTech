@@ -18,12 +18,17 @@ const client = mailgun.client({
 export class EmailService {
   async sendEmail(to: string, subject: string, html: string): Promise<boolean> {
     try {
-      await client.messages.create(process.env.MAILGUN_DOMAIN!, {
-        from: 'SD Tech Pros <noreply@sdtechpros.com>',
+      // Log attempt to send email
+      console.log('Attempting to send email to:', to);
+      console.log('Using Mailgun domain:', process.env.MAILGUN_DOMAIN);
+
+      await client.messages.create(process.env.MAILGUN_DOMAIN, {
+        from: `SD Tech Pros <mailgun@${process.env.MAILGUN_DOMAIN}>`,
         to: [to],
         subject,
         html,
       });
+
       console.log('Email sent successfully');
       return true;
     } catch (error) {
