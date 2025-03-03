@@ -7,6 +7,7 @@ import { Loader2, Mail, Phone, MapPin, Calendar } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CreateClientDialog } from "@/components/create-client-dialog";
 import { EditClientDialog } from "@/components/edit-client-dialog";
+import { Link } from "wouter";
 
 interface FreshbooksClient {
   id: string;
@@ -69,7 +70,7 @@ export default function ClientsPage() {
                       {client.status}
                     </Badge>
                   </div>
-                  <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="space-y-2 text-sm text-muted-foreground mb-4">
                     {client.email && (
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4" />
@@ -93,6 +94,11 @@ export default function ClientsPage() {
                       <span>Created: {client.createdDate}</span>
                     </div>
                   </div>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link href={`/clients/${client.id}`}>
+                      View Profile & Projects
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             ))}

@@ -479,6 +479,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+  // Add these endpoints to handle client-specific projects
+  app.get("/api/clients/:clientId/projects", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const projects = await storage.getProjectsByClientId(req.params.clientId);
+      res.json(projects);
+    } catch (error) {
+      console.error("Error fetching client projects:", error);
+      res.status(500).json({
+        error: "Failed to fetch projects",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  app.post("/api/clients/:clientId/projects", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const data = insertProjectSchema.parse({
+        ...req.body,
+        clientId: req.params.clientId
+      });
+
+      const project = await storage.createProject(data);
+      res.status(201).json(project);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      res.status(400).json({
+        error: "Failed to create project",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Add this new endpoint before the projects routes
   app.get("/api/clients", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

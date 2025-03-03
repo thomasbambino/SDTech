@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertProjectSchema } from "@shared/schema";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,27 +36,20 @@ import { useToast } from "@/hooks/use-toast";
 type ProjectFormData = {
   title: string;
   description: string;
-  clientId: number;
   status: string;
 };
 
-interface Client {
-  id: number;
-  username: string;
-  companyName: string | null;
+interface CreateProjectDialogProps {
+  clientId: string;
 }
 
-export function CreateProjectDialog() {
+export function CreateProjectDialog({ clientId }: CreateProjectDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: clients, isLoading: isLoadingClients } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
-  });
-
   const form = useForm<ProjectFormData>({
-    resolver: zodResolver(insertProjectSchema),
+    resolver: zodResolver(insertProjectSchema.omit({ clientId: true })),
     defaultValues: {
       status: "pending",
     },
@@ -64,7 +57,7 @@ export function CreateProjectDialog() {
 
   const createProject = useMutation({
     mutationFn: async (data: ProjectFormData) => {
-      const res = await apiRequest("POST", "/api/projects", data);
+      const res = await apiRequest("POST", `/api/clients/${clientId}/projects`, data);
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.message || "Failed to create project");
@@ -72,7 +65,7 @@ export function CreateProjectDialog() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "projects"] });
       toast({
         title: "Success",
         description: "Project created successfully",
@@ -101,7 +94,7 @@ export function CreateProjectDialog() {
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
           <DialogDescription>
-            Create a new project and assign it to a client.
+            Create a new project for this client.
           </DialogDescription>
         </DialogHeader>
 
@@ -130,33 +123,6 @@ export function CreateProjectDialog() {
                   <FormControl>
                     <Textarea placeholder="Project description" {...field} />
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="clientId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Client</FormLabel>
-                  <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a client" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {isLoadingClients ? (
-                        <SelectItem value="loading" disabled>Loading clients...</SelectItem>
-                      ) : clients?.map((client) => (
-                        <SelectItem key={client.id} value={client.id.toString()}>
-                          {client.companyName || client.username}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
