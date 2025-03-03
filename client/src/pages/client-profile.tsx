@@ -4,7 +4,7 @@ import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Mail, Phone, MapPin, Calendar } from "lucide-react";
+import { Loader2, Mail, Phone, MapPin, Calendar, DollarSign } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EditClientDialog } from "@/components/edit-client-dialog";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
@@ -14,6 +14,9 @@ interface Project {
   title: string;
   description: string;
   status: string;
+  dueDate?: string;
+  budget?: number;
+  fixedPrice?: string;
   createdAt: string;
 }
 
@@ -32,7 +35,6 @@ export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
   console.log("Loading client profile for ID:", id);
 
-  // Updated query to use consistent query keys
   const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", id],
     queryFn: async () => {
@@ -46,12 +48,13 @@ export default function ClientProfile() {
     }
   });
 
-  const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
+  const { data: projects, isLoading: isLoadingProjects, error: projectsError } = useQuery<Project[]>({
     queryKey: ["/api/freshbooks/clients", id, "projects"],
     queryFn: async () => {
       const response = await fetch(`/api/freshbooks/clients/${id}/projects`);
       if (!response.ok) {
-        return []; // Return empty array if no projects found
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Error: ${response.status}`);
       }
       return response.json();
     },
@@ -150,6 +153,12 @@ export default function ClientProfile() {
                 <div className="flex items-center justify-center h-32">
                   <Loader2 className="h-8 w-8 animate-spin" />
                 </div>
+              ) : projectsError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    {projectsError instanceof Error ? projectsError.message : "Failed to load projects"}
+                  </AlertDescription>
+                </Alert>
               ) : !projects?.length ? (
                 <Alert>
                   <AlertDescription>
@@ -172,6 +181,20 @@ export default function ClientProfile() {
                     </CardHeader>
                     <CardContent>
                       <p className="text-muted-foreground mb-4">{project.description}</p>
+                      <div className="space-y-2 mb-4">
+                        {project.dueDate && (
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <Calendar className="h-4 w-4 mr-2" />
+                            Due: {new Date(project.dueDate).toLocaleDateString()}
+                          </div>
+                        )}
+                        {project.fixedPrice && (
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <DollarSign className="h-4 w-4 mr-2" />
+                            Budget: ${Number(project.fixedPrice).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
                       <Button variant="outline" className="w-full" asChild>
                         <Link href={`/projects/${project.id}`}>View Details</Link>
                       </Button>
