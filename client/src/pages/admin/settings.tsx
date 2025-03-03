@@ -8,12 +8,21 @@ import { Loader2, Check, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 
+// Define the response type
+type FreshbooksStatus = {
+  isConnected: boolean;
+  lastConnected?: string;
+  error?: string;
+};
+
 export default function AdminSettings() {
   const { toast } = useToast();
   const [location] = useLocation();
 
-  const { data: freshbooksStatus, isLoading } = useQuery({
+  // Fetch Freshbooks connection status
+  const { data: freshbooksStatus, isLoading } = useQuery<FreshbooksStatus>({
     queryKey: ["/api/freshbooks/connection-status"],
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Show toast based on URL parameters

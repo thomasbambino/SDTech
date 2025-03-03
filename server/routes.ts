@@ -349,6 +349,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Freshbooks Integration (Admin only)
+  app.get("/api/freshbooks/connection-status", requireAdmin, async (req, res) => {
+    try {
+      // Check if we have tokens in session
+      const tokens = req.session.freshbooksTokens;
+      
+      if (!tokens) {
+        console.log("No Freshbooks tokens found in session");
+        return res.json({ isConnected: false });
+      }
+
+      // Verify the tokens are valid by making a test API call
+      const testResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const isConnected = testResponse.ok;
+      console.log("Freshbooks connection status:", { isConnected });
+
+      res.json({ 
+        isConnected,
+        lastConnected: isConnected ? new Date().toISOString() : null
+      });
+    } catch (error) {
+      console.error("Error checking Freshbooks connection status:", error);
+      res.json({ 
+        isConnected: false,
+        error: error instanceof Error ? error.message : "Failed to check connection status"
+      });
+    }
+  });
+
   app.get("/api/freshbooks/auth", requireAdmin, async (req, res) => {
     try {
       console.log("Starting Freshbooks auth URL generation");
