@@ -1,18 +1,22 @@
 import { NavBar } from "@/components/nav-bar";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Mail, Phone, Building } from "lucide-react";
+import { Loader2, Mail, Phone, MapPin, Calendar } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FreshbooksConnect } from "@/components/freshbooks-connect";
 
 interface FreshbooksClient {
   id: string;
-  email: string;
+  name: string;
   organization: string;
-  phoneNumber: string;
+  email: string;
+  phone: string;
+  address: string;
   status: string;
+  createdDate: string;
+  updatedDate: string;
 }
 
 export default function ClientsPage() {
@@ -52,26 +56,41 @@ export default function ClientsPage() {
               <Card key={client.id}>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
-                    <div>
-                      <h2 className="text-xl font-semibold mb-2">{client.organization}</h2>
+                    <div className="space-y-4">
+                      <div>
+                        <h2 className="text-xl font-semibold mb-1">{client.name}</h2>
+                        {client.organization && (
+                          <p className="text-sm text-muted-foreground">{client.organization}</p>
+                        )}
+                      </div>
                       <div className="space-y-2 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4" />
-                          <span>{client.email}</span>
-                        </div>
-                        {client.phoneNumber && (
+                        {client.email && (
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4" />
+                            <span>{client.email}</span>
+                          </div>
+                        )}
+                        {client.phone && (
                           <div className="flex items-center gap-2">
                             <Phone className="h-4 w-4" />
-                            <span>{client.phoneNumber}</span>
+                            <span>{client.phone}</span>
+                          </div>
+                        )}
+                        {client.address && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            <span>{client.address}</span>
                           </div>
                         )}
                         <div className="flex items-center gap-2">
-                          <Building className="h-4 w-4" />
-                          <span>{client.organization}</span>
+                          <Calendar className="h-4 w-4" />
+                          <span>Created: {client.createdDate}</span>
                         </div>
                       </div>
                     </div>
-                    <Badge>{client.status}</Badge>
+                    <Badge variant={client.status === 'Active' ? 'default' : 'secondary'}>
+                      {client.status}
+                    </Badge>
                   </div>
                 </CardContent>
               </Card>

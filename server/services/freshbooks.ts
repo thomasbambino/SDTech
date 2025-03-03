@@ -1,5 +1,57 @@
 import type { User } from "@shared/schema";
 
+// Function to properly format client data from Freshbooks API response
+function formatClientData(clients: any[]) {
+  return clients.map(client => {
+    // Handle name (could be in organization or first/last name fields)
+    let name = '';
+    if (client.fname || client.lname) {
+      name = `${client.fname || ''} ${client.lname || ''}`.trim();
+    }
+
+    // Handle organization (use as fallback name if no fname/lname)
+    let organization = client.organization || '';
+    if (!name && organization) {
+      name = organization;
+      organization = ''; // Clear organization if we're using it as the name
+    }
+
+    // Handle phone (check all possible phone fields)
+    let phone = '';
+    if (client.home_phone) phone = `${client.home_phone} (Home)`;
+    else if (client.bus_phone) phone = `${client.bus_phone} (Business)`;
+    else if (client.mob_phone) phone = `${client.mob_phone} (Mobile)`;
+
+    // Handle address
+    let address = [];
+    if (client.p_street) address.push(client.p_street);
+    if (client.p_street2) address.push(client.p_street2);
+    if (client.p_city) address.push(client.p_city);
+    if (client.p_province) address.push(client.p_province);
+    if (client.p_code) address.push(client.p_code);
+    if (client.p_country) address.push(client.p_country);
+
+    // Format dates
+    const createdDate = client.signup_date ? new Date(client.signup_date).toLocaleDateString() : '';
+    const updatedDate = client.updated ? new Date(client.updated).toLocaleDateString() : '';
+
+    // Determine status
+    const status = client.vis_state === 0 ? 'Active' : 'Inactive';
+
+    return {
+      id: client.id,
+      name: name || 'Unnamed Client',
+      organization,
+      email: client.email || '',
+      phone,
+      address: address.join(', '),
+      status,
+      createdDate,
+      updatedDate
+    };
+  });
+}
+
 export class FreshbooksService {
   private baseUrl = 'https://api.freshbooks.com';
   private authUrl = 'https://auth.freshbooks.com/oauth/authorize/';
@@ -125,14 +177,8 @@ export class FreshbooksService {
         throw new Error(`Failed to fetch clients: ${clientsResponse.status}`);
       }
 
-      const clientsData = await clientsResponse.json();
-      return clientsData.response.result.clients.map((client: any) => ({
-        id: client.id,
-        email: client.email || '',
-        organization: client.organization || '',
-        phoneNumber: client.bus_phone || client.mob_phone || '',
-        status: client.vis_state === 0 ? 'active' : 'inactive'
-      }));
+      const data = await clientsResponse.json();
+      return formatClientData(data.response.result.clients);
     } catch (error) {
       console.error("Error fetching clients:", error);
       throw error;
