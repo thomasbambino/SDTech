@@ -31,22 +31,18 @@ interface FreshbooksClient {
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
 
-  // Fetch all clients
+  // Use the same query as the clients page
   const { data: clients, isLoading: isLoadingClients, error: clientsError } = useQuery<FreshbooksClient[]>({
-    queryKey: ["/api/freshbooks/clients"],
-    onSuccess: (data) => {
-      console.log("Fetched clients data:", data); // Debug log
-    }
+    queryKey: ["/api/freshbooks/clients"]
   });
 
-  // Find the specific client
+  // Find the specific client from the list
   const client = clients?.find(c => c.id === id);
-  console.log("Current client ID:", id); // Debug log
-  console.log("Found client:", client); // Debug log
 
+  // Projects query
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ["/api/clients", id, "projects"],
-    enabled: !!client // Only fetch projects if we have a client
+    enabled: !!client
   });
 
   if (isLoadingClients || isLoadingProjects) {
@@ -64,7 +60,7 @@ export default function ClientProfile() {
         <div className="container mx-auto px-4 py-8">
           <Alert variant="destructive">
             <AlertDescription>
-              {clientsError instanceof Error ? clientsError.message : "Client not found. Please make sure you have access to view this client's details."}
+              {clientsError instanceof Error ? clientsError.message : "Client not found"}
             </AlertDescription>
           </Alert>
           <Button variant="outline" className="mt-4" asChild>
