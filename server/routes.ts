@@ -597,88 +597,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(users);
   });
 
-  // Add this endpoint before the other project-related routes
-  app.get("/api/freshbooks/projects", async (req, res) => {
+  // Add these new endpoints before the existing project routes
+
+  // Project Notes
+  app.get("/api/projects/:id/notes", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.id);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
     try {
-      const tokens = req.session.freshbooksTokens;
-      if (!tokens) {
-        return res.status(401).json({
-          error: "Freshbooks not connected",
-          details: "Please connect your Freshbooks account first"
-        });
-      }
-
-      // Get the business ID from user profile
-      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
-        headers: {
-          'Authorization': `Bearer ${tokens.access_token}`
-        }
-      });
-
-      if (!meResponse.ok) {
-        throw new Error(`Failed to get user details: ${meResponse.status}`);
-      }
-
-      const meData = await meResponse.json();
-      console.log("User profile data:", meData);
-
-      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
-
-      if (!businessId) {
-        throw new Error("No business ID found in user profile");
-      }
-
-      console.log("Using business ID:", businessId);
-
-      // Fetch all projects using the correct endpoint
-      const projectsResponse = await fetch(
-        `https://api.freshbooks.com/projects/business/${businessId}/projects`,
-        {
-          headers: {
-            'Authorization': `Bearer ${tokens.access_token}`
-          }
-        }
-      );
-
-      if (!projectsResponse.ok) {
-        const errorText = await projectsResponse.text();
-        console.error("Projects API error response:", errorText);
-        throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
-      }
-
-      const projectsData = await projectsResponse.json();
-      console.log("Raw projects response:", JSON.stringify(projectsData, null, 2));
-
-      // Check if we have projects in the response (note: changed from response.result.projects)
-      if (!projectsData.projects) {
-        console.log("No projects found in response");
-        return res.json([]);
-      }
-
-      // Format the projects data
-      const formattedProjects = projectsData.projects.map(project => {
-        console.log("Processing project:", project);
-        return {
-          id: project.id.toString(),
-          title: project.title?.trim() || 'Untitled Project', // Added trim() to remove newline
-          description: project.description || '',
-          status: project.complete ? 'Completed' : 'Active',
-          dueDate: project.due_date,
-          budget: project.budget,
-          fixedPrice: project.fixed_price,
-          createdAt: project.created_at, // Already in ISO format
-          clientId: project.client_id.toString()
-        };
-      });
-
-      console.log("Formatted projects:", formattedProjects);
-      res.json(formattedProjects);
+      const notes = await storage.getProjectNotes(projectId);
+      res.json(notes);
     } catch (error) {
-      console.error("Error fetching projects:", error);
-      res.status(500).json({
-        error: "Failed to fetch projects",
-        details: error instanceof Error ? error.message : String(error)
+      console.error("Error fetching project notes:", error);
+      res.status(500).json({ error: "Failed to fetch project notes" });
+    }
+  });
+
+  app.post("/api/projects/:id/notes", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.id);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    try {
+      const note = await storage.createProjectNote({
+        projectId,
+        content: req.body.content,
+        createdBy: req.user.id
       });
+      res.status(201).json(note);
+    } catch (error) {
+      console.error("Error creating project note:", error);
+      res.status(500).json({ error: "Failed to create project note" });
+    }
+  });
+
+  // Project Progress Update
+  app.patch("/api/projects/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.id);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const { progress } = req.body;
+    if (typeof progress !== 'number' || progress < 0 || progress > 100) {
+      return res.status(400).json({ error: "Progress must be a number between 0 and 100" });
+    }
+
+    try {
+      const project = await storage.updateProjectProgress(projectId, progress);
+      res.json(project);
+    } catch (error) {
+      console.error("Error updating project progress:", error);
+      res.status(500).json({ error: "Failed to update project progress" });
+    }
+  });
+
+  // File Upload
+  app.post("/api/projects/:id/documents", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.id);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const file = req.files.file;
+
+    try {
+      const document = await storage.createDocument({
+        projectId,
+        name: file.name,
+        content: file.data.toString('base64'),
+        fileSize: file.size,
+        fileType: file.mimetype,
+        uploadedBy: req.user.id
+      });
+      res.status(201).json(document);
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      res.status(500).json({ error: "Failed to upload document" });
+    }
+  });
+
+  // Update the existing project fetch to handle dates properly
+  app.get("/api/projects/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.id);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    try {
+      const project = await storage.getProject(projectId);
+      if (!project) return res.status(404).json({ error: "Project not found" });
+
+      // Format dates in ISO string format
+      const formattedProject = {
+        ...project,
+        createdAt: project.createdAt.toISOString(),
+        updatedAt: project.updatedAt?.toISOString()
+      };
+
+      res.json(formattedProject);
+    } catch (error) {
+      console.error("Error fetching project:", error);
+      res.status(500).json({ error: "Failed to fetch project" });
     }
   });
 

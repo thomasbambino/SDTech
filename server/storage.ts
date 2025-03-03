@@ -2,8 +2,8 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import { users, projects, invoices, documents } from "@shared/schema";
-import type { User, Project, Invoice, Document, InsertUser, InsertProject, InsertInvoice, InsertDocument } from "@shared/schema";
+import { users, projects, invoices, documents, projectNotes } from "@shared/schema";
+import type { User, Project, Invoice, Document, InsertUser, InsertProject, InsertInvoice, InsertDocument, ProjectNote, InsertProjectNote } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
@@ -32,6 +32,13 @@ export interface IStorage {
   getProjects(clientId: number): Promise<Project[]>;
   getProject(id: number): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
+  updateProjectProgress(id: number, progress: number): Promise<Project>;
+
+  // Project Notes
+  getProjectNotes(projectId: number): Promise<ProjectNote[]>;
+  createProjectNote(note: InsertProjectNote): Promise<ProjectNote>;
+  updateProjectNote(id: number, note: Partial<ProjectNote>): Promise<ProjectNote>;
+  deleteProjectNote(id: number): Promise<void>;
 
   // Invoices
   getInvoices(projectId: number): Promise<Invoice[]>;
@@ -120,6 +127,45 @@ export class DatabaseStorage implements IStorage {
     return newProject;
   }
 
+  async updateProjectProgress(id: number, progress: number): Promise<Project> {
+    const [project] = await db
+      .update(projects)
+      .set({ progress })
+      .where(eq(projects.id, id))
+      .returning();
+    return project;
+  }
+
+  async getProjectNotes(projectId: number): Promise<ProjectNote[]> {
+    return await db
+      .select()
+      .from(projectNotes)
+      .where(eq(projectNotes.projectId, projectId))
+      .orderBy(projectNotes.createdAt);
+  }
+
+  async createProjectNote(note: InsertProjectNote): Promise<ProjectNote> {
+    const [newNote] = await db
+      .insert(projectNotes)
+      .values({
+        ...note,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+    return newNote;
+  }
+
+  async updateProjectNote(id: number, note: Partial<ProjectNote>): Promise<ProjectNote> {
+    const [updatedNote] = await db.update(projectNotes).set(note).where(eq(projectNotes.id, id)).returning();
+    return updatedNote;
+  }
+
+  async deleteProjectNote(id: number): Promise<void> {
+    await db.delete(projectNotes).where(eq(projectNotes.id, id));
+  }
+
+
   async getInvoices(projectId: number): Promise<Invoice[]> {
     return await db.select().from(invoices).where(eq(invoices.projectId, projectId));
   }
@@ -139,7 +185,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDocument(document: InsertDocument): Promise<Document> {
-    const [newDocument] = await db.insert(documents).values(document).returning();
+    const [newDocument] = await db
+      .insert(documents)
+      .values({
+        ...document,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
     return newDocument;
   }
 }

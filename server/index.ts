@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import pg from 'pg';
 import session from 'express-session';
 import connectPg from 'connect-pg-simple';
+import fileUpload from 'express-fileupload';
 
 const PostgresSessionStore = connectPg(session);
 
@@ -28,6 +29,17 @@ function checkEnvironmentVariables() {
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Configure file upload middleware
+app.use(fileUpload({
+  createParentPath: true,
+  limits: { 
+    fileSize: 50 * 1024 * 1024 // 50MB max file size
+  },
+  abortOnLimit: true,
+  useTempFiles: true,
+  tempFileDir: '/tmp/'
+}));
 
 // Configure session middleware first
 const sessionConfig = {

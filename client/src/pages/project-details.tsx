@@ -20,6 +20,19 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
+// Helper function to safely format dates
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Date not available';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid date';
+    return date.toLocaleString();
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Date not available';
+  }
+};
+
 export default function ProjectDetails() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
@@ -125,7 +138,7 @@ export default function ProjectDetails() {
           <div>
             <h1 className="text-3xl font-bold">{project.title}</h1>
             <p className="text-muted-foreground">
-              Created {new Date(project.createdAt).toLocaleDateString()}
+              Created {formatDate(project.createdAt)}
             </p>
           </div>
           <Badge>{project.status}</Badge>
@@ -203,7 +216,7 @@ export default function ProjectDetails() {
                         <CardContent className="pt-6">
                           <p className="whitespace-pre-wrap">{note.content}</p>
                           <p className="text-sm text-muted-foreground mt-2">
-                            Added on {new Date(note.createdAt).toLocaleString()}
+                            Added on {formatDate(note.createdAt)}
                           </p>
                         </CardContent>
                       </Card>
@@ -267,7 +280,7 @@ export default function ProjectDetails() {
                 {project.dueDate && (
                   <div className="flex items-center">
                     <Calendar className="h-4 w-4 mr-2" />
-                    <span>Due: {new Date(project.dueDate).toLocaleDateString()}</span>
+                    <span>Due: {formatDate(project.dueDate)}</span>
                   </div>
                 )}
                 {project.budget && (
