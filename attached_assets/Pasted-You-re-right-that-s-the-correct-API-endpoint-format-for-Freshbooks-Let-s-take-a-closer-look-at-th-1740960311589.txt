@@ -1,0 +1,48 @@
+You're right - that's the correct API endpoint format for Freshbooks. Let's take a closer look at this.
+
+The Freshbooks API documentation shows that the endpoint for retrieving clients should be:
+
+```
+GET https://api.freshbooks.com/accounting/account/<accountId>/users/clients
+```
+
+This matches exactly with what you're seeing in the Freshbooks documentation. The issue in your code isn't with the endpoint URL structure but rather with how you're obtaining and using the `accountId`.
+
+In Freshbooks, the `accountId` needed for API calls is specifically the `account_id` property from the business membership, not the `business.id`. When you call the `/auth/api/v1/users/me` endpoint, you need to extract this specific ID.
+
+Let's modify your `getBusinessId` method to make sure it's extracting the correct ID:
+
+```typescript
+private async getBusinessId(accessToken: string) {
+  const meResponse = await fetch(`${this.baseUrl}/auth/api/v1/users/me`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!meResponse.ok) {
+    throw new Error(`Failed to get user details: ${meResponse.status}`);
+  }
+
+  const meData = await meResponse.json();
+  
+  // Log the entire response to see its structure
+  console.log("User profile response:", JSON.stringify(meData, null, 2));
+  
+  // Try to extract the account_id (this is the key part)
+  const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+  if (!accountId) {
+    console.error("Could not find account_id in response:", meData);
+    throw new Error("No account ID found in user profile");
+  }
+  
+  console.log("Found account ID:", accountId);
+  return accountId;
+}
+```
+
+This should help you correctly identify and extract the `account_id` that Freshbooks requires for API calls. Once you have the correct ID, the client endpoint you're using should work properly.
+
+If you're still having issues, I recommend adding detailed console logging to see exactly what's in the response from the `/users/me` endpoint. This will help you pinpoint exactly where the account_id is located in the response structure.

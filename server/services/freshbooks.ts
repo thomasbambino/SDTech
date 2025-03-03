@@ -77,31 +77,42 @@ export class FreshbooksService {
     }
   }
 
+  private async getBusinessId(accessToken: string) {
+    const meResponse = await fetch(`${this.baseUrl}/auth/api/v1/users/me`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!meResponse.ok) {
+      throw new Error(`Failed to get user details: ${meResponse.status}`);
+    }
+
+    const meData = await meResponse.json();
+
+    // Log the entire response to see its structure
+    console.log("User profile response:", JSON.stringify(meData, null, 2));
+
+    // Extract the account_id (this is the key part)
+    const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+    if (!accountId) {
+      console.error("Could not find account_id in response:", meData);
+      throw new Error("No account ID found in user profile");
+    }
+
+    console.log("Found account ID:", accountId);
+    return accountId;
+  }
+
   async getClients(accessToken: string) {
     try {
-      // First get the user's account ID
-      const meResponse = await fetch(`${this.baseUrl}/auth/api/v1/users/me`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const accountId = await this.getBusinessId(accessToken);
+      console.log("Fetching clients for account:", accountId);
 
-      if (!meResponse.ok) {
-        throw new Error(`Failed to get user details: ${meResponse.status}`);
-      }
-
-      const meData = await meResponse.json();
-      const businessId = meData.response.business_memberships?.[0]?.business.id;
-
-      if (!businessId) {
-        throw new Error("No business ID found");
-      }
-
-      console.log("Fetching clients for business:", businessId);
-      // Update endpoint to match API documentation
       const clientsResponse = await fetch(
-        `${this.baseUrl}/accounting/account/${businessId}/users/clients`,
+        `${this.baseUrl}/accounting/account/${accountId}/users/clients`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -128,33 +139,12 @@ export class FreshbooksService {
     }
   }
 
-  private async getBusinessId(accessToken: string) {
-    const meResponse = await fetch(`${this.baseUrl}/auth/api/v1/users/me`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!meResponse.ok) {
-      throw new Error(`Failed to get user details: ${meResponse.status}`);
-    }
-
-    const meData = await meResponse.json();
-    const businessId = meData.response.business_memberships?.[0]?.business.id;
-
-    if (!businessId) {
-      throw new Error("No business ID found");
-    }
-    return businessId;
-  }
-
   async syncProjects(accessToken: string) {
     try {
-      const businessId = await this.getBusinessId(accessToken);
-      console.log(`Fetching projects for business ${businessId}...`);
+      const accountId = await this.getBusinessId(accessToken);
+      console.log(`Fetching projects for account ${accountId}...`);
       const projectsResponse = await fetch(
-        `${this.baseUrl}/accounting/account/${businessId}/projects/projects`,
+        `${this.baseUrl}/accounting/account/${accountId}/projects/projects`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -177,10 +167,10 @@ export class FreshbooksService {
 
   async syncInvoices(accessToken: string) {
     try {
-      const businessId = await this.getBusinessId(accessToken);
-      console.log(`Fetching invoices for business ${businessId}...`);
+      const accountId = await this.getBusinessId(accessToken);
+      console.log(`Fetching invoices for account ${accountId}...`);
       const invoicesResponse = await fetch(
-        `${this.baseUrl}/accounting/account/${businessId}/invoices/invoices`,
+        `${this.baseUrl}/accounting/account/${accountId}/invoices/invoices`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
