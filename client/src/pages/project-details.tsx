@@ -353,22 +353,26 @@ export default function ProjectDetails() {
                           ) : (
                             <>
                               <p className="whitespace-pre-wrap">{note.content}</p>
-                              {note.createdBy === user?.id && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => startEditing(note)}
-                                  className="mt-2"
-                                >
-                                  <Edit2 className="h-4 w-4 mr-2" />
-                                  Edit
-                                </Button>
-                              )}
+                              <div className="flex justify-between items-center mt-2 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  <span>By {note.createdBy === user?.id ? 'You' : `User ${note.createdBy}`}</span>
+                                  {note.createdBy === user?.id && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => startEditing(note)}
+                                      className="h-6 w-6 p-0"
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                                <span>{formatDate(note.createdAt)}</span>
+                              </div>
                             </>
                           )}
                           <div className="flex justify-between items-center mt-2 text-sm text-muted-foreground">
-                            <span>By {note.createdBy === user?.id ? 'You' : `User ${note.createdBy}`}</span>
-                            <span>{formatDate(note.createdAt)}</span>
+
                           </div>
                         </CardContent>
                       </Card>
