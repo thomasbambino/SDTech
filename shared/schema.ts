@@ -53,6 +53,10 @@ export const insertInquirySchema = createInsertSchema(users).pick({
   address: true,
 }).extend({
   name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  phoneNumber: z.string().optional(),
+  companyName: z.string().optional(),
+  address: z.string().optional().describe("Format: street, city, province, postal code, country"),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({

@@ -36,6 +36,7 @@ async function createInitialAdminUser() {
         role: 'admin',
         companyName: 'SD Tech Pros',
         isTemporaryPassword: false,
+        freshbooksToken: process.env.FRESHBOOKS_ADMIN_TOKEN // Add freshbooksToken here
       });
       console.log('Initial admin user created successfully');
     }
@@ -75,6 +76,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isTemporaryPassword: true,
       });
 
+      // Get admin's Freshbooks tokens
+      const adminUser = await storage.getUserByUsername('admin@sdtechpros.com');
+      if (!adminUser) {
+        throw new Error("Admin user not found");
+      }
+
+      // Create client in Freshbooks
+      const [firstName, ...lastNameParts] = inquiryData.name.split(" ");
+      const lastName = lastNameParts.join(" ");
+
+      // Format address parts
+      const addressParts = inquiryData.address ? inquiryData.address.split(", ") : [];
+      const [street, city, province, postalCode, country] = addressParts;
+
+      const freshbooksClientData = {
+        fname: firstName,
+        lname: lastName || "",
+        organization: inquiryData.companyName,
+        email: inquiryData.email,
+        home_phone: inquiryData.phoneNumber,
+        p_street: street || "",
+        p_city: city || "",
+        p_province: province || "",
+        p_code: postalCode || "",
+        p_country: country || "",
+        currency_code: "USD",
+        language: "en"
+      };
+
+      // Create the client in Freshbooks using admin token
+      await freshbooksService.createClient(adminUser.freshbooksToken, {
+        client: freshbooksClientData
+      });
+
       // TODO: Send email with temporary password
       // For now, return it in response (only in development)
       res.status(201).json({
@@ -83,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error creating inquiry:", error);
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create inquiry" });
     }
   });
 
