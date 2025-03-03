@@ -393,6 +393,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(document);
   });
 
+  // Add this debug endpoint with the other Freshbooks routes
+  app.get("/api/freshbooks/debug/clients", requireAdmin, async (req, res) => {
+    try {
+      console.log("Fetching raw Freshbooks client data for debugging");
+      const tokens = req.session.freshbooksTokens;
+
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the account ID
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+      if (!accountId) {
+        throw new Error("No account ID found in user profile");
+      }
+
+      // Fetch clients with the account ID
+      const clientsResponse = await fetch(
+        `https://api.freshbooks.com/accounting/account/${accountId}/users/clients`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!clientsResponse.ok) {
+        throw new Error(`Failed to fetch clients: ${clientsResponse.status}`);
+      }
+
+      const rawData = await clientsResponse.json();
+      res.json(rawData);
+    } catch (error) {
+      console.error("Debug endpoint error:", error);
+      res.status(500).json({
+        error: "Failed to fetch debug data",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
