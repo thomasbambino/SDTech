@@ -14,12 +14,34 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2, Calendar, DollarSign, Edit2, Save, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+
+// Project stages with corresponding progress percentages
+const PROJECT_STAGES = {
+  "Not Started": 0,
+  "Requirements Gathering": 10,
+  "Design Phase": 25,
+  "Development - Initial": 40,
+  "Development - Advanced": 60,
+  "Testing": 75,
+  "Client Review": 85,
+  "Final Adjustments": 95,
+  "Completed": 100
+} as const;
+
+type ProjectStage = keyof typeof PROJECT_STAGES;
 
 // Helper function to safely format dates
 const formatDate = (dateString: string | null | undefined): string => {
@@ -32,6 +54,17 @@ const formatDate = (dateString: string | null | undefined): string => {
     console.error('Error formatting date:', error);
     return 'Date not available';
   }
+};
+
+// Helper function to get stage from progress
+const getStageFromProgress = (progress: number): ProjectStage => {
+  const stages = Object.entries(PROJECT_STAGES);
+  for (let i = stages.length - 1; i >= 0; i--) {
+    if (progress >= stages[i][1]) {
+      return stages[i][0] as ProjectStage;
+    }
+  }
+  return "Not Started";
 };
 
 export default function ProjectDetails() {
@@ -224,6 +257,12 @@ export default function ProjectDetails() {
     }
   };
 
+  // Handle project stage change
+  const handleStageChange = (stage: ProjectStage) => {
+    const progress = PROJECT_STAGES[stage];
+    updateProgressMutation.mutate(progress);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -235,6 +274,8 @@ export default function ProjectDetails() {
   if (!project) {
     return <div>Project not found</div>;
   }
+
+  const currentStage = getStageFromProgress(project.progress || 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -256,19 +297,26 @@ export default function ProjectDetails() {
             <CardTitle>Project Progress</CardTitle>
           </CardHeader>
           <CardContent>
-            <Progress value={project.progress || 0} className="mb-2" />
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>{project.progress || 0}% Complete</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const newProgress = ((project.progress || 0) + 10) % 110;
-                  updateProgressMutation.mutate(newProgress);
-                }}
+            <div className="space-y-4">
+              <Select
+                value={currentStage}
+                onValueChange={(value) => handleStageChange(value as ProjectStage)}
               >
-                Update Progress
-              </Button>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select project stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PROJECT_STAGES).map(([stage, progress]) => (
+                    <SelectItem key={stage} value={stage}>
+                      {stage} ({progress}%)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Progress value={project.progress || 0} className="mb-2" />
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>{project.progress || 0}% Complete</span>
+              </div>
             </div>
           </CardContent>
         </Card>
