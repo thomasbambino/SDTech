@@ -427,15 +427,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const meData = await meResponse.json();
-      console.log("User profile response:", JSON.stringify(meData, null, 2));
       const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
 
       if (!accountId) {
         throw new Error("No account ID found in user profile");
       }
-
-      console.log("Found account ID:", accountId);
-      console.log("Fetching client for account:", accountId);
 
       // Fetch single client with the account ID
       const clientResponse = await fetch(
@@ -457,12 +453,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Format the response to match the clients listing structure
       const clientData = rawData.response.result.client;
+
+      // Handle date formatting properly
+      let createdDate;
+      if (clientData.signup_date) {
+        createdDate = new Date(clientData.signup_date * 1000).toLocaleDateString();
+      } else if (clientData.updated) {
+        createdDate = new Date(clientData.updated * 1000).toLocaleDateString();
+      } else {
+        createdDate = 'Date not available';
+      }
+
       const formattedClient = {
-        id: clientData.id.toString(),  // Ensure ID is a string
+        id: clientData.id.toString(),
         name: `${clientData.fname} ${clientData.lname}`.trim(),
-        organization: clientData.organization,
-        email: clientData.email,
-        phone: clientData.home_phone,
+        organization: clientData.organization || '',
+        email: clientData.email || '',
+        phone: clientData.home_phone || '',
         address: [
           clientData.p_street,
           clientData.p_street2,
@@ -472,7 +479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clientData.p_country
         ].filter(Boolean).join(", "),
         status: clientData.vis_state === 0 ? "Active" : "Inactive",
-        createdDate: new Date(clientData.updated * 1000).toLocaleDateString()
+        createdDate: createdDate
       };
 
       console.log("Formatted client data:", formattedClient);
