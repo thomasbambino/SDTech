@@ -18,7 +18,6 @@ interface EditProjectDialogProps {
     clientId: string;
     fixedPrice?: string;
     budget?: number;
-    logged_duration?: number;
   };
 }
 
@@ -28,7 +27,6 @@ interface ProjectFormData {
   dueDate: string;
   fixedPrice: string;
   budget: string;
-  logged_duration: string;
 }
 
 export function EditProjectDialog({ project }: EditProjectDialogProps) {
@@ -41,8 +39,7 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
       description: project.description || '',
       dueDate: project.dueDate || '',
       fixedPrice: project.fixedPrice || '',
-      budget: project.budget?.toString() || '',
-      logged_duration: project.logged_duration?.toString() || ''
+      budget: project.budget?.toString() || ''
     },
   });
 
@@ -60,8 +57,7 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
             due_date: data.dueDate,
             client_id: project.clientId,
             fixed_price: data.fixedPrice,
-            budget: data.budget ? parseInt(data.budget) : undefined,
-            logged_duration: data.logged_duration ? parseInt(data.logged_duration) : undefined
+            budget: data.budget ? parseInt(data.budget) : undefined
           }
         }),
       });
@@ -173,24 +169,6 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
                       type="number" 
                       min="0" 
                       placeholder="Enter budget in cents"
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="logged_duration"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Logged Duration (in seconds)</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number" 
-                      min="0" 
-                      placeholder="Enter duration in seconds"
                       {...field} 
                     />
                   </FormControl>
