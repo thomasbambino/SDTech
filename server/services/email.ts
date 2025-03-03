@@ -19,20 +19,27 @@ export class EmailService {
   async sendEmail(to: string, subject: string, html: string): Promise<boolean> {
     try {
       // Log attempt to send email
-      console.log('Attempting to send email to:', to);
-      console.log('Using Mailgun domain:', process.env.MAILGUN_DOMAIN);
+      console.log('Attempting to send email:', {
+        to,
+        from: 'SD Tech Pros <noreply@sdtechpros.com>',
+        domain: process.env.MAILGUN_DOMAIN
+      });
 
-      await client.messages.create(process.env.MAILGUN_DOMAIN, {
+      const result = await client.messages.create(process.env.MAILGUN_DOMAIN, {
         from: 'SD Tech Pros <noreply@sdtechpros.com>',
         to: [to],
         subject,
         html,
       });
 
-      console.log('Email sent successfully');
+      console.log('Email sent successfully:', result);
       return true;
     } catch (error) {
-      console.error('Error sending email:', error);
+      console.error('Error sending email:', {
+        error,
+        stack: error instanceof Error ? error.stack : undefined,
+        details: error instanceof Error ? error.message : String(error)
+      });
       return false;
     }
   }
