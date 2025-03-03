@@ -81,6 +81,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         companyName: inquiryData.companyName,
         role: "pending",
         isTemporaryPassword: true,
+        inquiryDetails: inquiryData.details
       });
 
       // Return temporary password in response (only in development)
@@ -110,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add endpoint for admins to approve inquiries and create Freshbooks clients
+  // Update the project creation when approving inquiry
   app.post("/api/admin/inquiries/:id/approve", requireAdmin, async (req, res) => {
     try {
       // Check if Freshbooks is connected
@@ -129,8 +130,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create client in Freshbooks
       const freshbooksClientData = {
-        fname: user.username.split('@')[0], // Temporary solution, improve later
-        lname: "",
+        fname: user.firstName,
+        lname: user.lastName,
         organization: user.companyName,
         email: user.email,
         home_phone: user.phoneNumber,
@@ -139,18 +140,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       try {
-        await freshbooksService.createClient(req.session.freshbooksTokens.access_token, {
+        const freshbooksClient = await freshbooksService.createClient(req.session.freshbooksTokens.access_token, {
           client: freshbooksClientData
         });
+
+        // Create initial project from inquiry details
+        if (user.inquiryDetails) {
+          const project = await storage.createProject({
+            title: "Initial Inquiry Project",
+            description: user.inquiryDetails,
+            clientId: user.id,
+            status: "pending"
+          });
+        }
+
+        // Update user role to customer
+        await storage.updateUserRole(userId, "customer");
+
+        res.json({ message: "Inquiry approved and client created successfully" });
       } catch (freshbooksError) {
         console.error("Freshbooks error:", freshbooksError);
         throw new Error("Failed to create Freshbooks client. Please try again later.");
       }
-
-      // Update user role to customer
-      await storage.updateUserRole(userId, "customer");
-
-      res.json({ message: "Inquiry approved and client created successfully" });
     } catch (error) {
       console.error("Error approving inquiry:", error);
       res.status(500).json({

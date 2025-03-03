@@ -14,6 +14,7 @@ interface PendingInquiry {
   email: string;
   phoneNumber?: string;
   companyName?: string;
+  inquiryDetails?: string;
   createdAt: string;
 }
 
@@ -100,6 +101,14 @@ export default function InquiriesPage() {
                           </div>
                         )}
                       </div>
+                      {inquiry.inquiryDetails && (
+                        <div className="mt-4">
+                          <h3 className="font-medium mb-2">Inquiry Details:</h3>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                            {inquiry.inquiryDetails}
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <Button
                       onClick={() => importMutation.mutate(inquiry.id)}

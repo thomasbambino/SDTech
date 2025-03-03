@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function CustomerInquiry() {
   const { toast } = useToast();
@@ -140,6 +141,23 @@ export default function CustomerInquiry() {
                         <FormLabel>Company Name</FormLabel>
                         <FormControl>
                           <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="details"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Inquiry Details</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Please describe what services you're interested in or any specific requirements you have."
+                            className="min-h-[100px]"
+                            {...field} 
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

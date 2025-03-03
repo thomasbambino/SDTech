@@ -10,12 +10,15 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   role: userRoleEnum("role").default("pending").notNull(),
   email: text("email").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
   phoneNumber: text("phone_number"),
   companyName: text("company_name"),
   address: text("address"),
   isTemporaryPassword: boolean("is_temporary_password").default(false),
   lastPasswordChange: timestamp("last_password_change"),
   createdAt: timestamp("created_at").defaultNow(),
+  inquiryDetails: text("inquiry_details"),
 });
 
 export const projects = pgTable("projects", {
@@ -56,6 +59,7 @@ export const insertInquirySchema = createInsertSchema(users).pick({
   email: z.string().email("Invalid email address"),
   phoneNumber: z.string().optional(),
   companyName: z.string().optional(),
+  details: z.string().min(1, "Please provide details about your inquiry"),
 });
 
 export type InsertInquiry = z.infer<typeof insertInquirySchema>;
