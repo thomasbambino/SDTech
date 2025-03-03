@@ -14,6 +14,7 @@ import AdminSettings from "@/pages/admin/settings";
 import CustomerInquiry from "@/pages/inquiry";
 import ChangePassword from "@/pages/change-password";
 import Clients from "@/pages/clients";
+import Projects from "@/pages/projects";
 import ClientProfile from "@/pages/client-profile";
 import { ProtectedRoute } from "./lib/protected-route";
 import OAuthCallback from "@/pages/oauth-callback";
@@ -41,6 +42,7 @@ function Router() {
       <AdminRoute path="/admin/inquiries" component={InquiriesPage} />
       <AdminRoute path="/admin/settings" component={AdminSettings} />
       <AdminRoute path="/clients" component={Clients} />
+      <AdminRoute path="/projects" component={Projects} />
       <Route path="/auth/callback" component={OAuthCallback} />
       <Route component={NotFound} />
     </Switch>
