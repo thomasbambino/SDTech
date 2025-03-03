@@ -69,34 +69,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Check if Freshbooks is connected
-      if (!req.session.freshbooksTokens) {
-        return res.status(400).json({
-          error: "Freshbooks is not connected. Please connect your Freshbooks account first."
-        });
-      }
-
-      // Create client in Freshbooks first
-      const freshbooksClientData = {
-        fname: inquiryData.firstName,
-        lname: inquiryData.lastName,
-        organization: inquiryData.companyName,
-        email: inquiryData.email,
-        home_phone: inquiryData.phoneNumber,
-        currency_code: "USD",
-        language: "en"
-      };
-
-      try {
-        await freshbooksService.createClient(req.session.freshbooksTokens.access_token, {
-          client: freshbooksClientData
-        });
-      } catch (freshbooksError) {
-        console.error("Freshbooks error:", freshbooksError);
-        throw new Error("Failed to create Freshbooks client. Please try again later.");
-      }
-
-      // Create user with temporary password
+      // Create user with temporary password and pending status
       const tempPassword = generateTemporaryPassword();
       const hashedPassword = await storage.hashPassword(tempPassword);
 
@@ -119,6 +92,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error creating inquiry:", error);
       res.status(400).json({ 
         error: error instanceof Error ? error.message : "Failed to create inquiry" 
+      });
+    }
+  });
+
+  // Add endpoint for admins to get pending inquiries
+  app.get("/api/admin/inquiries", requireAdmin, async (req, res) => {
+    try {
+      const pendingUsers = await storage.getUsersByRole("pending");
+      res.json(pendingUsers);
+    } catch (error) {
+      console.error("Error fetching pending inquiries:", error);
+      res.status(500).json({
+        error: "Failed to fetch pending inquiries",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Add endpoint for admins to approve inquiries and create Freshbooks clients
+  app.post("/api/admin/inquiries/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      // Check if Freshbooks is connected
+      if (!req.session.freshbooksTokens) {
+        return res.status(400).json({
+          error: "Freshbooks is not connected. Please connect your Freshbooks account first."
+        });
+      }
+
+      const userId = parseInt(req.params.id);
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Create client in Freshbooks
+      const freshbooksClientData = {
+        fname: user.username.split('@')[0], // Temporary solution, improve later
+        lname: "",
+        organization: user.companyName,
+        email: user.email,
+        home_phone: user.phoneNumber,
+        currency_code: "USD",
+        language: "en"
+      };
+
+      try {
+        await freshbooksService.createClient(req.session.freshbooksTokens.access_token, {
+          client: freshbooksClientData
+        });
+      } catch (freshbooksError) {
+        console.error("Freshbooks error:", freshbooksError);
+        throw new Error("Failed to create Freshbooks client. Please try again later.");
+      }
+
+      // Update user role to customer
+      await storage.updateUserRole(userId, "customer");
+
+      res.json({ message: "Inquiry approved and client created successfully" });
+    } catch (error) {
+      console.error("Error approving inquiry:", error);
+      res.status(500).json({
+        error: "Failed to approve inquiry",
+        details: error instanceof Error ? error.message : String(error)
       });
     }
   });

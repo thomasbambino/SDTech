@@ -22,6 +22,7 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+  getUsersByRole(role: 'pending' | 'customer' | 'admin'): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUserRole(id: number, role: 'pending' | 'customer' | 'admin'): Promise<User>;
   updateUserPassword(id: number, password: string, isTemporary?: boolean): Promise<User>;
@@ -72,6 +73,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
+  }
+
+  async getUsersByRole(role: 'pending' | 'customer' | 'admin'): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, role));
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
