@@ -18,6 +18,16 @@ interface Project {
   budget?: number;
   fixedPrice?: string;
   createdAt: string;
+  clientId: string;
+  billingMethod?: string;
+  projectType?: string;
+  billedAmount?: string;
+  billedStatus?: string;
+  services?: Array<{
+    id: number;
+    name: string;
+    billable: boolean;
+  }>;
 }
 
 interface FreshbooksClient {
@@ -173,14 +183,18 @@ export default function ClientProfile() {
                         <div>
                           <CardTitle>{project.title}</CardTitle>
                           <CardDescription>
-                            Created {new Date(project.createdAt).toLocaleDateString()}
+                            Created {new Date(project.createdAt).toLocaleString()}
                           </CardDescription>
                         </div>
-                        <Badge>{project.status}</Badge>
+                        <Badge variant={project.status === 'Active' ? 'default' : 'secondary'}>
+                          {project.status}
+                        </Badge>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-muted-foreground mb-4">{project.description}</p>
+                      <p className="text-muted-foreground mb-4">
+                        {project.description || 'No description provided'}
+                      </p>
                       <div className="space-y-2 mb-4">
                         {project.dueDate && (
                           <div className="flex items-center text-sm text-muted-foreground">
@@ -191,7 +205,23 @@ export default function ClientProfile() {
                         {project.fixedPrice && (
                           <div className="flex items-center text-sm text-muted-foreground">
                             <DollarSign className="h-4 w-4 mr-2" />
-                            Budget: ${Number(project.fixedPrice).toLocaleString()}
+                            Fixed Price: ${Number(project.fixedPrice).toLocaleString()}
+                          </div>
+                        )}
+                        {project.budget && (
+                          <div className="flex items-center text-sm text-muted-foreground">
+                            <DollarSign className="h-4 w-4 mr-2" />
+                            Budget: ${Number(project.budget).toLocaleString()}
+                          </div>
+                        )}
+                        {project.services && project.services.length > 0 && (
+                          <div className="mt-4">
+                            <h4 className="text-sm font-medium mb-2">Services:</h4>
+                            <ul className="list-disc list-inside text-sm text-muted-foreground">
+                              {project.services.map(service => (
+                                <li key={service.id}>{service.name}</li>
+                              ))}
+                            </ul>
                           </div>
                         )}
                       </div>
