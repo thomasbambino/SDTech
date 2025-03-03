@@ -17,6 +17,7 @@ interface EditProjectDialogProps {
     dueDate?: string;
     clientId: string;
     fixedPrice?: string;
+    budget?: number;
   };
 }
 
@@ -25,6 +26,7 @@ interface ProjectFormData {
   description: string;
   dueDate: string;
   fixedPrice: string;
+  budget: string;
 }
 
 export function EditProjectDialog({ project }: EditProjectDialogProps) {
@@ -36,7 +38,8 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
       title: project.title,
       description: project.description || '',
       dueDate: project.dueDate || '',
-      fixedPrice: project.fixedPrice || ''
+      fixedPrice: project.fixedPrice || '',
+      budget: project.budget?.toString() || ''
     },
   });
 
@@ -53,7 +56,8 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
             description: data.description,
             due_date: data.dueDate,
             client_id: project.clientId,
-            fixed_price: data.fixedPrice
+            fixed_price: data.fixedPrice,
+            budget: data.budget ? parseInt(data.budget) : undefined
           }
         }),
       });
@@ -147,6 +151,24 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
                       step="0.01" 
                       min="0" 
                       placeholder="Enter fixed price"
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="budget"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Budget (in cents)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      min="0" 
+                      placeholder="Enter budget in cents"
                       {...field} 
                     />
                   </FormControl>
