@@ -23,7 +23,7 @@ function generateTemporaryPassword(): string {
   return randomBytes(8).toString('hex');
 }
 
-// Add this helper function at the top with the other imports and helpers
+// Update the createInitialAdminUser function to add freshbooksToken
 async function createInitialAdminUser() {
   try {
     const existingAdmin = await storage.getUserByUsername('admin@sdtechpros.com');
@@ -69,6 +69,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Check if Freshbooks is connected
+      if (!req.session.freshbooksTokens) {
+        return res.status(400).json({
+          error: "Freshbooks is not connected. Please connect your Freshbooks account first."
+        });
+      }
+
       // Create client in Freshbooks first
       const freshbooksClientData = {
         fname: inquiryData.firstName,
@@ -80,10 +87,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         language: "en"
       };
 
-      // Create the client in Freshbooks using environment token
-      await freshbooksService.createClient(process.env.FRESHBOOKS_ADMIN_TOKEN!, {
-        client: freshbooksClientData
-      });
+      try {
+        await freshbooksService.createClient(req.session.freshbooksTokens.access_token, {
+          client: freshbooksClientData
+        });
+      } catch (freshbooksError) {
+        console.error("Freshbooks error:", freshbooksError);
+        throw new Error("Failed to create Freshbooks client. Please try again later.");
+      }
 
       // Create user with temporary password
       const tempPassword = generateTemporaryPassword();
