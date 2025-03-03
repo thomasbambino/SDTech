@@ -159,9 +159,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       try {
-        const freshbooksClient = await freshbooksService.createClient(req.session.freshbooksTokens.access_token, {
-          client: freshbooksClientData
-        });
+        // Create client using the accountId
+        const clientsResponse = await fetch(
+          `https://api.freshbooks.com/accounting/account/${accountId}/users/clients`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${req.session.freshbooksTokens.access_token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ client: freshbooksClientData })
+          }
+        );
+
+        if (!clientsResponse.ok) {
+          throw new Error(`Failed to create client: ${clientsResponse.status}`);
+        }
+
+        const freshbooksClient = await clientsResponse.json();
 
         // Create initial project from inquiry details
         if (user.inquiryDetails) {
