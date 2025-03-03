@@ -887,6 +887,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this new endpoint for project access based on user role
+  app.get("/api/projects", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const authenticatedUser = req.user as Express.User;
+      
+      // If admin, return all projects
+      if (authenticatedUser.role === 'admin') {
+        const projects = await storage.getAllProjects();
+        return res.json(projects);
+      }
+
+      // For customers, get both local and Freshbooks projects if available
+      if (authenticatedUser.role === 'customer') {
+        // Get local projects
+        const localProjects = await storage.getProjectsByClientId(authenticatedUser.id);
+        
+        // If user has Freshbooks ID, also get Freshbooks projects
+        if (authenticatedUser.freshbooksId && req.session.freshbooksTokens) {
+          try {
+            // Get account ID for Freshbooks API
+            const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+              headers: {
+                'Authorization': `Bearer ${req.session.freshbooksTokens.access_token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            if (!meResponse.ok) {
+              throw new Error(`Failed to get user details: ${meResponse.status}`);
+            }
+
+            const meData = await meResponse.json();
+            const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+            if (!accountId) {
+              throw new Error("No account ID found in user profile");
+            }
+
+            // Fetch Freshbooks projects
+            const projectsResponse = await fetch(
+              `https://api.freshbooks.com/projects/business/${accountId}/projects?client_id=${authenticatedUser.freshbooksId}`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${req.session.freshbooksTokens.access_token}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            if (projectsResponse.ok) {
+              const fbData = await projectsResponse.json();
+              const freshbooksProjects = fbData.projects.map((project: any) => ({
+                id: `fb_${project.id}`,  // Prefix to distinguish from local projects
+                title: project.title,
+                description: project.description || '',
+                status: project.active ? "Active" : "Inactive",
+                createdAt: new Date(project.created_at),
+                freshbooksId: project.id.toString(),
+                clientId: authenticatedUser.id,
+                progress: null,
+                // Additional Freshbooks-specific fields
+                dueDate: project.due_date,
+                budget: project.budget,
+                fixedPrice: project.fixed_price
+              }));
+
+              // Combine local and Freshbooks projects
+              return res.json([...(localProjects || []), ...freshbooksProjects]);
+            }
+          } catch (fbError) {
+            console.error("Error fetching Freshbooks projects:", fbError);
+            // Continue with local projects if Freshbooks fails
+          }
+        }
+
+        // Return local projects if no Freshbooks projects were fetched
+        return res.json(localProjects || []);
+      }
+
+      // For pending users or other roles
+      return res.status(403).json({ 
+        error: "Access denied. Insufficient permissions.",
+        details: "Your account does not have the required permissions to view projects."
+      });
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({
+        error: "Failed to fetch projects",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Add this new endpoint before the projects routes
   app.get("/api/clients", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
