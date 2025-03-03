@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Loader2, FileText, Upload, Calendar, DollarSign } from "lucide-react";
+import { Loader2, Calendar, DollarSign } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -42,13 +42,22 @@ export default function ProjectDetails() {
   // Fetch project details
   const { data: project, isLoading } = useQuery<Project>({
     queryKey: ["/api/projects", id],
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/${id}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error("Failed to fetch project");
+      return response.json();
+    }
   });
 
   // Fetch project notes
   const { data: notes } = useQuery<ProjectNote[]>({
     queryKey: ["/api/projects", id, "notes"],
     queryFn: async () => {
-      const response = await fetch(`/api/projects/${id}/notes`);
+      const response = await fetch(`/api/projects/${id}/notes`, {
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error("Failed to fetch notes");
       return response.json();
     },
@@ -57,8 +66,16 @@ export default function ProjectDetails() {
   // Add note mutation
   const addNoteMutation = useMutation({
     mutationFn: async (content: string) => {
-      const res = await apiRequest("POST", `/api/projects/${id}/notes`, { content });
-      return res.json();
+      const response = await fetch(`/api/projects/${id}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ content })
+      });
+      if (!response.ok) throw new Error("Failed to add note");
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", id, "notes"] });
@@ -81,8 +98,16 @@ export default function ProjectDetails() {
   // Update progress mutation
   const updateProgressMutation = useMutation({
     mutationFn: async (progress: number) => {
-      const res = await apiRequest("PATCH", `/api/projects/${id}`, { progress });
-      return res.json();
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ progress })
+      });
+      if (!response.ok) throw new Error("Failed to update progress");
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
@@ -106,18 +131,17 @@ export default function ProjectDetails() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      // Use fetch directly for file upload as apiRequest doesn't handle FormData
-      const res = await fetch(`/api/projects/${id}/documents`, {
+      const response = await fetch(`/api/projects/${id}/documents`, {
         method: "POST",
+        credentials: "include",
         body: formData,
-        credentials: "include", // Important for sending cookies
       });
-      if (!res.ok) throw new Error("Failed to upload file");
-      return res.json();
+      if (!response.ok) throw new Error("Failed to upload file");
+      return response.json();
     },
     onSuccess: () => {
       setSelectedFile(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", id, "documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
       toast({
         title: "Success",
         description: "File uploaded successfully",
@@ -281,10 +305,7 @@ export default function ProjectDetails() {
                           Uploading...
                         </>
                       ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload File
-                        </>
+                        "Upload File"
                       )}
                     </Button>
                   </div>
