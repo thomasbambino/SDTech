@@ -1,10 +1,10 @@
 import { NavBar } from "@/components/nav-bar";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Mail, Phone, MapPin, Calendar, Plus } from "lucide-react";
+import { Loader2, Mail, Phone, MapPin, Calendar } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EditClientDialog } from "@/components/edit-client-dialog";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
@@ -19,15 +19,13 @@ interface Project {
 
 interface FreshbooksClient {
   id: string;
+  name: string;
   organization: string;
   email: string;
   phone: string;
   address: string;
   status: string;
   createdDate: string;
-  updatedDate: string;
-  fname?: string;
-  lname?: string;
 }
 
 export default function ClientProfile() {
@@ -76,9 +74,6 @@ export default function ClientProfile() {
     );
   }
 
-  // Construct the full name from fname and lname
-  const clientName = [client.fname, client.lname].filter(Boolean).join(" ");
-
   return (
     <div className="min-h-screen bg-background">
       <NavBar />
@@ -90,7 +85,7 @@ export default function ClientProfile() {
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-2xl font-semibold">{clientName}</h2>
+                    <h2 className="text-2xl font-semibold">{client.name}</h2>
                     {client.organization && (
                       <p className="text-sm text-muted-foreground">{client.organization}</p>
                     )}
@@ -161,7 +156,7 @@ export default function ClientProfile() {
                     <CardContent>
                       <p className="text-muted-foreground mb-4">{project.description}</p>
                       <Button variant="outline" className="w-full" asChild>
-                        <a href={`/projects/${project.id}`}>View Details</a>
+                        <Link href={`/projects/${project.id}`}>View Details</Link>
                       </Button>
                     </CardContent>
                   </Card>

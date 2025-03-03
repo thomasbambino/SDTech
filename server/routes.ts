@@ -455,7 +455,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const rawData = await clientResponse.json();
       console.log("Client data response:", JSON.stringify(rawData, null, 2));
-      res.json(rawData.response.result.client);
+
+      // Format the response to match the clients listing structure
+      const clientData = rawData.response.result.client;
+      const formattedClient = {
+        id: clientData.id,
+        name: `${clientData.fname} ${clientData.lname}`.trim(),
+        organization: clientData.organization,
+        email: clientData.email,
+        phone: clientData.home_phone,
+        address: [
+          clientData.p_street,
+          clientData.p_street2,
+          clientData.p_city,
+          clientData.p_province,
+          clientData.p_code,
+          clientData.p_country
+        ].filter(Boolean).join(", "),
+        status: clientData.vis_state === 0 ? "Active" : "Inactive",
+        createdDate: new Date(clientData.updated * 1000).toLocaleDateString()
+      };
+
+      res.json(formattedClient);
     } catch (error) {
       console.error("Error fetching client:", error);
       res.status(500).json({
