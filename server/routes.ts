@@ -649,24 +649,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const projectsData = await projectsResponse.json();
       console.log("Raw projects response:", JSON.stringify(projectsData, null, 2));
 
-      // Check if we have the expected response structure
-      if (!projectsData.response?.result?.projects) {
+      // Check if we have projects in the response (note: changed from response.result.projects)
+      if (!projectsData.projects) {
         console.log("No projects found in response");
         return res.json([]);
       }
 
       // Format the projects data
-      const formattedProjects = projectsData.response.result.projects.map(project => {
+      const formattedProjects = projectsData.projects.map(project => {
         console.log("Processing project:", project);
         return {
           id: project.id.toString(),
-          title: project.title || 'Untitled Project',
+          title: project.title?.trim() || 'Untitled Project', // Added trim() to remove newline
           description: project.description || '',
           status: project.complete ? 'Completed' : 'Active',
           dueDate: project.due_date,
           budget: project.budget,
           fixedPrice: project.fixed_price,
-          createdAt: new Date(project.created_at * 1000).toISOString(),
+          createdAt: project.created_at, // Already in ISO format
           clientId: project.client_id.toString()
         };
       });
@@ -908,7 +908,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!projectsResponse.ok) {
         // If no projects found, return empty array instead of error
-        if (projectsResponse.status === 404) {
+                if (projectsResponse.status === 404) {
           return res.json([]);
         }
         throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
