@@ -52,41 +52,45 @@ function validateId(id: string): number | null {
   return isNaN(parsed) ? null : parsed;
 }
 
-const formatDate = (dateString: string | null | undefined) => {
+const formatDate = (dateString: string | null | undefined, timezone: string = 'America/Los_Angeles') => {
     try {
       if (!dateString) return 'Date not available';
 
+      let date: Date;
+
       // Check if it's a string representation of a date
       if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}/)) {
-        // Parse the ISO-like date string
-        const date = new Date(dateString);
-
-        // Check if the date is valid
-        if (!isNaN(date.getTime())) {
-          return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          });
-        }
+        date = new Date(dateString);
       }
-
       // If it's a numeric timestamp (seconds since epoch)
-      if (!isNaN(Number(dateString))) {
+      else if (!isNaN(Number(dateString))) {
         const timestamp = Number(dateString);
-        return new Date(timestamp * 1000).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
+        date = new Date(timestamp * 1000);
+      } else {
+        return 'Invalid date';
       }
 
-      return 'Invalid date';
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+
+      // Format the date in the specified timezone
+      return date.toLocaleString('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true,
+        timeZoneName: 'short'
+      });
     } catch (error) {
       console.error('Error formatting date:', error);
       return 'Date formatting error';
     }
-  };
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -451,7 +455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get the account ID
+      // Get the account ID and timezone
       const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
         headers: {
           'Authorization': `Bearer ${tokens.access_token}`,
@@ -465,6 +469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const meData = await meResponse.json();
       const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+      const timezone = meData.response?.timezone || 'America/Los_Angeles';
 
       if (!accountId) {
         throw new Error("No account ID found in user profile");
@@ -510,7 +515,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clientData.p_country
         ].filter(Boolean).join(", "),
         status: clientData.vis_state === 0 ? "Active" : "Inactive",
-        createdDate: formatDate(clientData.signup_date) || formatDate(clientData.updated) || formatDate(clientData.created_at) || 'Date not available'
+        createdDate: formatDate(clientData.signup_date, timezone) || 
+                    formatDate(clientData.updated, timezone) || 
+                    formatDate(clientData.created_at, timezone) || 
+                    'Date not available'
       };
 
       console.log("Formatted client data:", formattedClient);
