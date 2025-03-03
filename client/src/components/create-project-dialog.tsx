@@ -40,11 +40,10 @@ type ProjectFormData = {
   status: string;
 };
 
-interface User {
+interface Client {
   id: number;
   username: string;
   companyName: string | null;
-  role: string;
 }
 
 export function CreateProjectDialog() {
@@ -52,8 +51,8 @@ export function CreateProjectDialog() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: clients } = useQuery<User[]>({
-    queryKey: ["/api/admin/users"],
+  const { data: clients, isLoading: isLoadingClients } = useQuery<Client[]>({
+    queryKey: ["/api/clients"],
   });
 
   const form = useForm<ProjectFormData>({
@@ -89,9 +88,6 @@ export function CreateProjectDialog() {
       });
     },
   });
-
-  // Filter only customer users
-  const customerClients = clients?.filter(user => user.role === "customer") || [];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -152,7 +148,9 @@ export function CreateProjectDialog() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {customerClients.map((client) => (
+                      {isLoadingClients ? (
+                        <SelectItem value="loading" disabled>Loading clients...</SelectItem>
+                      ) : clients?.map((client) => (
                         <SelectItem key={client.id} value={client.id.toString()}>
                           {client.companyName || client.username}
                         </SelectItem>

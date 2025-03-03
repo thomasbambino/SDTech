@@ -479,6 +479,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+  // Add this new endpoint before the projects routes
+  app.get("/api/clients", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    // Get all users with role "customer"
+    const users = await storage.getUsersByRole("customer");
+    res.json(users);
+  });
+
   // Projects
   app.get("/api/projects", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
