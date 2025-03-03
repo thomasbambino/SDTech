@@ -5,23 +5,79 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Project } from "@shared/schema";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { FileText, User, Phone, Mail, Building } from "lucide-react";
+import { FileText, User, Phone, Mail, Building, Calendar, DollarSign, Loader2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
+
+interface FreshbooksClient {
+  id: string;
+  name: string;
+  organization: string;
+  email: string;
+  phone: string;
+  address: string;
+  status: string;
+  createdDate: string;
+}
+
+interface FreshbooksProject {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  dueDate?: string;
+  budget?: number;
+  fixedPrice?: string;
+  createdAt: string;
+  clientId: string;
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  const { data: projects } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+  // Fetch Freshbooks client data if user is a customer
+  const { data: fbClient, isLoading: isLoadingClient } = useQuery<FreshbooksClient>({
+    queryKey: ["/api/freshbooks/clients", user?.freshbooksId],
+    queryFn: async () => {
+      const response = await fetch(`/api/freshbooks/clients/${user?.freshbooksId}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error("Failed to fetch client details");
+      return response.json();
+    },
+    enabled: !isAdmin && !!user?.freshbooksId
   });
+
+  // Fetch Freshbooks projects for the client
+  const { data: fbProjects, isLoading: isLoadingProjects } = useQuery<FreshbooksProject[]>({
+    queryKey: ["/api/freshbooks/clients", user?.freshbooksId, "projects"],
+    queryFn: async () => {
+      const response = await fetch(`/api/freshbooks/clients/${user?.freshbooksId}/projects`, {
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error("Failed to fetch projects");
+      return response.json();
+    },
+    enabled: !isAdmin && !!user?.freshbooksId
+  });
+
+  if (isLoadingClient || isLoadingProjects) {
+    return (
+      <div className="min-h-screen bg-background">
+        <NavBar />
+        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <NavBar />
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">Welcome, {user?.companyName}</h1>
+        <h1 className="text-3xl font-bold mb-8">Welcome, {fbClient?.organization || user?.companyName}</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Profile Section */}
@@ -36,16 +92,22 @@ export default function Dashboard() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Building className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">{user?.companyName}</span>
+                  <span className="font-medium">{fbClient?.organization || user?.companyName}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{user?.email}</span>
+                  <span>{fbClient?.email || user?.email}</span>
                 </div>
-                {user?.phoneNumber && (
+                {(fbClient?.phone || user?.phoneNumber) && (
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{user?.phoneNumber}</span>
+                    <span>{fbClient?.phone || user?.phoneNumber}</span>
+                  </div>
+                )}
+                {fbClient?.address && (
+                  <div className="flex items-center gap-2">
+                    <Building className="h-4 w-4 text-muted-foreground" />
+                    <span>{fbClient.address}</span>
                   </div>
                 )}
               </div>
@@ -63,11 +125,11 @@ export default function Dashboard() {
                 {isAdmin && <CreateProjectDialog />}
               </CardHeader>
               <CardContent>
-                {!projects?.length ? (
+                {!fbProjects?.length ? (
                   <p className="text-muted-foreground">No projects found.</p>
                 ) : (
                   <div className="space-y-4">
-                    {projects.map((project) => (
+                    {fbProjects.map((project) => (
                       <Card key={project.id} className="bg-muted/50">
                         <CardContent className="p-4">
                           <div className="flex justify-between items-start mb-2">
@@ -82,10 +144,18 @@ export default function Dashboard() {
                             </Button>
                           </div>
                           <div className="space-y-2">
-                            <Progress value={project.progress || 0} />
-                            <div className="flex justify-between text-sm text-muted-foreground">
-                              <span>{project.progress || 0}% Complete</span>
-                            </div>
+                            {project.dueDate && (
+                              <div className="flex items-center text-sm text-muted-foreground">
+                                <Calendar className="h-4 w-4 mr-2" />
+                                Due: {new Date(project.dueDate).toLocaleDateString()}
+                              </div>
+                            )}
+                            {project.fixedPrice && (
+                              <div className="flex items-center text-sm text-muted-foreground">
+                                <DollarSign className="h-4 w-4 mr-2" />
+                                Budget: ${Number(project.fixedPrice).toLocaleString()}
+                              </div>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
