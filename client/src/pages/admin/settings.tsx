@@ -5,13 +5,35 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Check, X } from "lucide-react";
+import { useLocation } from "wouter";
+import { useEffect } from "react";
 
 export default function AdminSettings() {
   const { toast } = useToast();
-  
+  const [location] = useLocation();
+
   const { data: freshbooksStatus, isLoading } = useQuery({
     queryKey: ["/api/freshbooks/connection-status"],
   });
+
+  // Show toast based on URL parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const freshbooksStatus = params.get('freshbooks');
+
+    if (freshbooksStatus === 'connected') {
+      toast({
+        title: "Success",
+        description: "Successfully connected to Freshbooks",
+      });
+    } else if (freshbooksStatus === 'error') {
+      toast({
+        title: "Error",
+        description: "Failed to connect to Freshbooks",
+        variant: "destructive",
+      });
+    }
+  }, [location, toast]);
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {
@@ -60,12 +82,13 @@ export default function AdminSettings() {
       <NavBar />
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Admin Settings</h1>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Freshbooks Integration</CardTitle>
             <CardDescription>
               Connect your Freshbooks account to enable client management and invoicing features.
+              This connection will be used across all features of the application.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -86,7 +109,7 @@ export default function AdminSettings() {
                   </div>
                 )}
               </div>
-              
+
               {freshbooksStatus?.isConnected ? (
                 <Button
                   variant="destructive"

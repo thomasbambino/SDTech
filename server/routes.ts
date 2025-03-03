@@ -36,7 +36,7 @@ async function createInitialAdminUser() {
         role: 'admin',
         companyName: 'SD Tech Pros',
         isTemporaryPassword: false,
-        freshbooksToken: process.env.FRESHBOOKS_ADMIN_TOKEN // Add freshbooksToken here
+        freshbooksToken: process.env.FRESHBOOKS_ADMIN_TOKEN
       });
       console.log('Initial admin user created successfully');
     }
@@ -54,7 +54,7 @@ function validateId(id: string): number | null {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
-  await createInitialAdminUser(); // Add this line to create admin user on startup
+  await createInitialAdminUser();
 
   // Customer Inquiry Form
   app.post("/api/inquiries", async (req, res) => {
@@ -87,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return temporary password in response (only in development)
       res.status(201).json({
         message: "Inquiry submitted successfully",
-        tempPassword // Remove this in production
+        tempPassword
       });
     } catch (error) {
       console.error("Error creating inquiry:", error);
@@ -221,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For now, return it in response (only in development)
       res.json({
         message: "Password reset successful",
-        tempPassword // Remove this in production
+        tempPassword
       });
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -293,14 +293,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       });
 
-      res.redirect("/clients?freshbooks=connected");
+      res.redirect("/admin/settings?freshbooks=connected");
     } catch (error) {
       console.error("Freshbooks auth callback error:", error);
       if (error instanceof Error) {
         console.error("Error details:", error.message);
         console.error("Stack trace:", error.stack);
       }
-      res.redirect("/clients?freshbooks=error");
+      res.redirect("/admin/settings?freshbooks=error");
     }
   });
 
@@ -448,7 +448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!a.dueDate || !b.dueDate) return 0;
         return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
       })
-      .slice(0, 5); // Get only the 5 most recent
+      .slice(0, 5);
 
     res.json(allInvoices);
   });
