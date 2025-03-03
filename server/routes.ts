@@ -61,21 +61,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const inquiryData = insertInquirySchema.parse(req.body);
 
-      // Create user with temporary password
-      const tempPassword = generateTemporaryPassword();
-      const hashedPassword = await storage.hashPassword(tempPassword);
+      // Check if user already exists
+      const existingUser = await storage.getUserByUsername(inquiryData.email);
+      if (existingUser) {
+        return res.status(400).json({ 
+          error: "An account with this email already exists. Please login or use a different email." 
+        });
+      }
 
-      const user = await storage.createUser({
-        username: inquiryData.email, // Use email as username
-        password: hashedPassword,
-        email: inquiryData.email,
-        phoneNumber: inquiryData.phoneNumber,
-        companyName: inquiryData.companyName,
-        role: "pending",
-        isTemporaryPassword: true,
-      });
-
-      // Create client in Freshbooks
+      // Create client in Freshbooks first
       const freshbooksClientData = {
         fname: inquiryData.firstName,
         lname: inquiryData.lastName,
@@ -91,6 +85,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         client: freshbooksClientData
       });
 
+      // Create user with temporary password
+      const tempPassword = generateTemporaryPassword();
+      const hashedPassword = await storage.hashPassword(tempPassword);
+
+      const user = await storage.createUser({
+        username: inquiryData.email,
+        password: hashedPassword,
+        email: inquiryData.email,
+        phoneNumber: inquiryData.phoneNumber,
+        companyName: inquiryData.companyName,
+        role: "pending",
+        isTemporaryPassword: true,
+      });
+
       // Return temporary password in response (only in development)
       res.status(201).json({
         message: "Inquiry submitted successfully",
@@ -98,7 +106,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error creating inquiry:", error);
-      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create inquiry" });
+      res.status(400).json({ 
+        error: error instanceof Error ? error.message : "Failed to create inquiry" 
+      });
     }
   });
 

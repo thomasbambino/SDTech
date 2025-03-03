@@ -35,6 +35,10 @@ export default function CustomerInquiry() {
   const inquiryMutation = useMutation({
     mutationFn: async (data: InsertInquiry) => {
       const res = await apiRequest("POST", "/api/inquiries", data);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to submit inquiry");
+      }
       return res.json();
     },
     onSuccess: () => {
