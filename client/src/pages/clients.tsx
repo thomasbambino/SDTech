@@ -18,12 +18,17 @@ interface FreshbooksClient {
   address: string;
   status: string;
   createdDate: string;
-  updatedDate: string;
 }
 
 export default function ClientsPage() {
   const { data: clients, isLoading, error } = useQuery<FreshbooksClient[]>({
     queryKey: ["/api/freshbooks/clients"],
+    onSuccess: (data) => {
+      console.log("Fetched clients:", data); // Debug log
+    },
+    onError: (error) => {
+      console.error("Error fetching clients:", error); // Debug log
+    }
   });
 
   return (

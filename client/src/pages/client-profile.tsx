@@ -34,10 +34,15 @@ export default function ClientProfile() {
   // Fetch all clients
   const { data: clients, isLoading: isLoadingClients, error: clientsError } = useQuery<FreshbooksClient[]>({
     queryKey: ["/api/freshbooks/clients"],
+    onSuccess: (data) => {
+      console.log("Fetched clients data:", data); // Debug log
+    }
   });
 
   // Find the specific client
   const client = clients?.find(c => c.id === id);
+  console.log("Current client ID:", id); // Debug log
+  console.log("Found client:", client); // Debug log
 
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ["/api/clients", id, "projects"],
