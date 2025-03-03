@@ -382,9 +382,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Get user profile first to get timezone
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+      const timezone = meData.response?.timezone || 'America/Los_Angeles';
+
+      if (!accountId) {
+        throw new Error("No account ID found in user profile");
+      }
+
       console.log("Fetching Freshbooks clients with access token");
-      const clients = await freshbooksService.getClients(tokens.access_token);
-      res.json(clients);
+      // Fetch clients with the account ID
+      const clientsResponse = await fetch(
+        `https://api.freshbooks.com/accounting/account/${accountId}/users/clients`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!clientsResponse.ok) {
+        throw new Error(`Failed to fetch clients: ${clientsResponse.status}`);
+      }
+
+      const rawData = await clientsResponse.json();
+      const formattedClients = rawData.response.result.clients.map(client => ({
+        id: client.id.toString(),
+        name: `${client.fname} ${client.lname}`.trim(),
+        organization: client.organization || '',
+        email: client.email || '',
+        phone: client.home_phone || '',
+        address: [
+          client.p_street,
+          client.p_street2,
+          client.p_city,
+          client.p_province,
+          client.p_code,
+          client.p_country
+        ].filter(Boolean).join(", "),
+        status: client.vis_state === 0 ? "Active" : "Inactive",
+        createdDate: formatDate(client.signup_date, timezone) || 
+                    formatDate(client.updated, timezone) || 
+                    formatDate(client.created_at, timezone) || 
+                    'Date not available'
+      }));
+
+      res.json(formattedClients);
     } catch (error) {
       console.error("Error fetching Freshbooks clients:", error);
       if (error instanceof Error) {
