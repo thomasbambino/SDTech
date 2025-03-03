@@ -371,9 +371,6 @@ export default function ProjectDetails() {
                               </div>
                             </>
                           )}
-                          <div className="flex justify-between items-center mt-2 text-sm text-muted-foreground">
-
-                          </div>
                         </CardContent>
                       </Card>
                     ))}
