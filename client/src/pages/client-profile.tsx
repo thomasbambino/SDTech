@@ -32,19 +32,36 @@ export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
   console.log("Loading client profile for ID:", id);
 
+  // Updated query to use the correct endpoint structure
   const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
-    queryKey: ["/api/freshbooks/clients", id],
+    queryKey: ["client", id],
+    queryFn: async () => {
+      console.log(`Fetching client with ID: ${id}`);
+      const response = await fetch(`/api/freshbooks/clients/${id}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Error: ${response.status}`);
+      }
+      return response.json();
+    },
     onSuccess: (data) => {
       console.log("Received client data:", data);
+    },
+    onError: (error) => {
+      console.error("Error loading client:", error);
     }
   });
 
-  const { data: projects, isLoading: isLoadingProjects, error: projectsError } = useQuery<Project[]>({
-    queryKey: ["/api/freshbooks/clients", id, "projects"],
-    enabled: !!client,
-    onSuccess: (data) => {
-      console.log("Received projects data:", data);
-    }
+  const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
+    queryKey: ["projects", id],
+    queryFn: async () => {
+      const response = await fetch(`/api/freshbooks/clients/${id}/projects`);
+      if (!response.ok) {
+        return []; // Return empty array if no projects found
+      }
+      return response.json();
+    },
+    enabled: !!client // Only run this query if client data is loaded
   });
 
   if (isLoadingClient) {
@@ -139,12 +156,6 @@ export default function ClientProfile() {
                 <div className="flex items-center justify-center h-32">
                   <Loader2 className="h-8 w-8 animate-spin" />
                 </div>
-              ) : projectsError ? (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    {projectsError instanceof Error ? projectsError.message : "Failed to load projects"}
-                  </AlertDescription>
-                </Alert>
               ) : !projects?.length ? (
                 <Alert>
                   <AlertDescription>
@@ -168,9 +179,7 @@ export default function ClientProfile() {
                     <CardContent>
                       <p className="text-muted-foreground mb-4">{project.description}</p>
                       <Button variant="outline" className="w-full" asChild>
-                        <Link href={`/clients/${client.id}/projects/${project.id}`}>
-                          View Details
-                        </Link>
+                        <Link href={`/projects/${project.id}`}>View Details</Link>
                       </Button>
                     </CardContent>
                   </Card>
