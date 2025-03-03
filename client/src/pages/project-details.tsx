@@ -73,6 +73,7 @@ export default function ProjectDetails() {
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editedNoteContent, setEditedNoteContent] = useState("");
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   // Fetch project details
   const { data: project, isLoading } = useQuery<Project>({
@@ -296,24 +297,33 @@ export default function ProjectDetails() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <Select
-                value={currentStage}
-                onValueChange={(value) => handleStageChange(value as ProjectStage)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select project stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(PROJECT_STAGES).map(([stage, progress]) => (
-                    <SelectItem key={stage} value={stage}>
-                      {stage} ({progress}%)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Progress value={project.progress || 0} className="mb-2" />
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>{project.progress || 0}% Complete</span>
+              <div className="flex items-center gap-4">
+                {isAdmin && (
+                  <div className="w-64">
+                    <Select
+                      value={currentStage}
+                      onValueChange={(value) => handleStageChange(value as ProjectStage)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select project stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(PROJECT_STAGES).map(([stage, progress]) => (
+                          <SelectItem key={stage} value={stage}>
+                            {stage} ({progress}%)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="flex-1 space-y-2">
+                  <Progress value={project.progress || 0} />
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>{project.progress || 0}% Complete</span>
+                    <span>{currentStage}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </CardContent>
