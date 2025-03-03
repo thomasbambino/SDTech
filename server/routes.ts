@@ -788,6 +788,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add new endpoint for editing notes
+  app.patch("/api/projects/:id/notes/:noteId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const projectId = validateId(req.params.id);
+      const noteId = validateId(req.params.noteId);
+      
+      if (projectId === null || noteId === null) {
+        return res.status(400).json({ error: "Invalid project or note ID" });
+      }
+
+      // Get the project
+      let project = await storage.getProject(projectId);
+      if (!project) {
+        project = await storage.getProjectByFreshbooksId(req.params.id);
+      }
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Get the note and verify ownership
+      const notes = await storage.getProjectNotes(project.id);
+      const note = notes.find(n => n.id === noteId);
+
+      if (!note) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+
+      if (note.createdBy !== req.user.id) {
+        return res.status(403).json({ error: "You can only edit your own notes" });
+      }
+
+      // Update the note
+      const updatedNote = await storage.updateProjectNote(noteId, {
+        content: req.body.content,
+        updatedAt: new Date()
+      });
+
+      res.json(updatedNote);
+    } catch (error) {
+      console.error("Error updating note:", error);
+      res.status(500).json({ error: "Failed to update note" });
+    }
+  });
+
   // Project Progress Update
   app.patch("/api/projects/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);

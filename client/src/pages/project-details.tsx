@@ -14,11 +14,12 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Loader2, Calendar, DollarSign } from "lucide-react";
+import { Loader2, Calendar, DollarSign, Edit2, Save, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 
 // Helper function to safely format dates
 const formatDate = (dateString: string | null | undefined): string => {
@@ -38,6 +39,9 @@ export default function ProjectDetails() {
   const { toast } = useToast();
   const [newNote, setNewNote] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editedNoteContent, setEditedNoteContent] = useState("");
+  const { user } = useAuth();
 
   // Fetch project details
   const { data: project, isLoading } = useQuery<Project>({
@@ -90,6 +94,39 @@ export default function ProjectDetails() {
       toast({
         title: "Error",
         description: "Failed to add note. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Edit note mutation
+  const editNoteMutation = useMutation({
+    mutationFn: async ({ noteId, content }: { noteId: number; content: string }) => {
+      const response = await fetch(`/api/projects/${id}/notes/${noteId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ content })
+      });
+      if (!response.ok) throw new Error("Failed to update note");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", id, "notes"] });
+      setEditingNoteId(null);
+      setEditedNoteContent("");
+      toast({
+        title: "Success",
+        description: "Note updated successfully",
+      });
+    },
+    onError: (error) => {
+      console.error("Error updating note:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update note. Please try again.",
         variant: "destructive",
       });
     },
@@ -165,6 +202,25 @@ export default function ProjectDetails() {
   const handleFileUpload = () => {
     if (selectedFile) {
       uploadFileMutation.mutate(selectedFile);
+    }
+  };
+
+  const startEditing = (note: ProjectNote) => {
+    setEditingNoteId(note.id);
+    setEditedNoteContent(note.content);
+  };
+
+  const cancelEditing = () => {
+    setEditingNoteId(null);
+    setEditedNoteContent("");
+  };
+
+  const saveEdit = (noteId: number) => {
+    if (editedNoteContent.trim()) {
+      editNoteMutation.mutate({
+        noteId,
+        content: editedNoteContent.trim()
+      });
     }
   };
 
@@ -264,10 +320,56 @@ export default function ProjectDetails() {
                     {notes?.map((note) => (
                       <Card key={note.id}>
                         <CardContent className="pt-6">
-                          <p className="whitespace-pre-wrap">{note.content}</p>
-                          <p className="text-sm text-muted-foreground mt-2">
-                            Added on {formatDate(note.createdAt)}
-                          </p>
+                          {editingNoteId === note.id ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editedNoteContent}
+                                onChange={(e) => setEditedNoteContent(e.target.value)}
+                                className="min-h-[100px]"
+                              />
+                              <div className="flex space-x-2">
+                                <Button
+                                  onClick={() => saveEdit(note.id)}
+                                  disabled={editNoteMutation.isPending}
+                                >
+                                  {editNoteMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Save className="h-4 w-4 mr-2" />
+                                      Save
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={cancelEditing}
+                                >
+                                  <X className="h-4 w-4 mr-2" />
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="whitespace-pre-wrap">{note.content}</p>
+                              {note.createdBy === user?.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => startEditing(note)}
+                                  className="mt-2"
+                                >
+                                  <Edit2 className="h-4 w-4 mr-2" />
+                                  Edit
+                                </Button>
+                              )}
+                            </>
+                          )}
+                          <div className="flex justify-between items-center mt-2 text-sm text-muted-foreground">
+                            <span>By {note.createdBy === user?.id ? 'You' : `User ${note.createdBy}`}</span>
+                            <span>{formatDate(note.createdAt)}</span>
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
