@@ -30,29 +30,18 @@ interface FreshbooksClient {
 
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
-  console.log("Profile page - Client ID from URL:", id); // Debug log
 
-  const { data: clients, isLoading: isLoadingClients, error: clientsError } = useQuery<FreshbooksClient[]>({
-    queryKey: ["/api/freshbooks/clients"],
-    onSuccess: (data) => {
-      console.log("Profile page - All clients:", data); // Debug log
-    }
+  // Single client query instead of fetching all clients
+  const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
+    queryKey: ["/api/freshbooks/clients", id],
   });
-
-  // Find the specific client from the list
-  const client = clients?.find(c => {
-    console.log("Profile page - Comparing IDs:", { urlId: id, clientId: c.id }); // Debug log
-    return c.id === id;
-  });
-
-  console.log("Profile page - Found client:", client); // Debug log
 
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ["/api/clients", id, "projects"],
     enabled: !!client
   });
 
-  if (isLoadingClients || isLoadingProjects) {
+  if (isLoadingClient || isLoadingProjects) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -60,14 +49,14 @@ export default function ClientProfile() {
     );
   }
 
-  if (clientsError || !client) {
+  if (clientError || !client) {
     return (
       <div className="min-h-screen bg-background">
         <NavBar />
         <div className="container mx-auto px-4 py-8">
           <Alert variant="destructive">
             <AlertDescription>
-              {clientsError instanceof Error ? clientsError.message : `Client not found for ID: ${id}`}
+              {clientError instanceof Error ? clientError.message : `Client not found for ID: ${id}`}
             </AlertDescription>
           </Alert>
           <Button variant="outline" className="mt-4" asChild>
