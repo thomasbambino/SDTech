@@ -844,9 +844,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Try to send email, but don't fail if it doesn't work
         try {
-          await emailService.sendPasswordResetEmail(newUser.email, tempPassword);
+          const emailSent = await emailService.sendPasswordResetEmail(newUser.email, tempPassword);
+          if (!emailSent) {
+            console.warn("Failed to send password reset email, but user was created");
+          }
         } catch (emailError) {
-          console.error("Failed to send password reset email:", emailError);
+          console.error("Error sending password reset email:", emailError);
         }
 
         res.json({
@@ -864,9 +867,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Try to send email, but don't fail if it doesn't work
         try {
-          await emailService.sendPasswordResetEmail(user.email, tempPassword);
+          const emailSent = await emailService.sendPasswordResetEmail(user.email, tempPassword);
+          if (!emailSent) {
+            console.warn("Failed to send password reset email");
+          }
         } catch (emailError) {
-          console.error("Failed to send password reset email:", emailError);
+          console.error("Error sending password reset email:", emailError);
         }
 
         res.json({

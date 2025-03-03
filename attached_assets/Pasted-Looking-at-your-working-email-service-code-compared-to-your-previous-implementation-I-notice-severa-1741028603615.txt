@@ -1,3 +1,18 @@
+Looking at your working email service code compared to your previous implementation, I notice several key differences that could explain why emails aren't going out:
+
+1. **Early Environment Variable Validation**: Your working code validates environment variables at the module level (immediately upon import), rather than at runtime when sending emails.
+
+2. **Client Creation**: You're creating the Mailgun client differently - naming it `client` instead of `mg` and setting it up outside the class.
+
+3. **Email Sending Structure**: Your working code uses a standalone function approach rather than a class-based method, which might affect how the code executes in your application context.
+
+4. **Template Support**: Your working code has robust template handling that's missing from the previous implementation.
+
+5. **Return Value**: Your working code returns a boolean success indicator instead of the Mailgun result object.
+
+Here's an updated version of your original class-based code that incorporates the patterns from your working example:
+
+```typescript
 import formData from 'form-data';
 import Mailgun from 'mailgun.js';
 
@@ -51,3 +66,11 @@ export class EmailService {
 }
 
 export const emailService = new EmailService();
+```
+
+If you prefer the functional approach from your working code, I'd recommend simply using that instead of the class-based approach, since you've confirmed it works.
+
+Other things to check:
+1. Make sure your environment variables are correctly set in your runtime environment
+2. Check that you're correctly importing and using `emailService` in your application
+3. Review Mailgun logs to see if requests are being received but failing for another reason (authentication, rate limits, etc.)
