@@ -858,9 +858,260 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update the projects endpoint with correct Freshbooks API structure
   app.get("/api/freshbooks/clients/:id/projects", async (req, res) => {
     try {
       console.log("Fetching projects for client ID:", req.params.id);
+      const tokens = req.session.freshbooksTokens;
+
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the business ID from user profile
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+
+      if (!businessId) {
+        throw new Error("No business ID found in user profile");
+      }
+
+      // Fetch projects using the correct endpoint
+      const projectsResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/projects?client_id=${req.params.id}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`
+          }
+        }
+      );
+
+      if (!projectsResponse.ok) {
+        // If no projects found, return empty array instead of error
+        if (projectsResponse.status === 404) {
+          return res.json([]);
+        }
+        throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
+      }
+
+      const projectsData = await projectsResponse.json();
+      console.log("Raw projects data:", projectsData);
+
+      // Handle case where no projects exist
+      if (!projectsData.response?.result?.projects) {
+        return res.json([]);
+      }
+
+      // Format the projects data
+      const formattedProjects = projectsData.response.result.projects.map(project => ({
+        id: project.id.toString(),
+        title: project.title || 'Untitled Project',
+        description: project.description || '',
+        status: project.complete ? 'Completed' : 'Active',
+        createdAt: new Date(project.created_at * 1000).toISOString()
+      }));
+
+      console.log("Formatted projects:", formattedProjects);
+      res.json(formattedProjects);
+    } catch (error) {
+      console.error("Error fetching client projects:", error);
+      res.status(500).json({
+        error: "Failed to fetch client projects",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Add project creation endpoint
+  app.post("/api/freshbooks/clients/:id/projects", async (req, res) => {
+    try {
+      const tokens = req.session.freshbooksTokens;
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the business ID
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+
+      if (!businessId) {
+        throw new Error("No business ID found in user profile");
+      }
+
+      // Create project using the correct endpoint
+      const createProjectResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/project`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            project: {
+              title: req.body.title,
+              description: req.body.description,
+              client_id: req.params.id,
+              project_type: "fixed_price", // or hourly_rate based on your needs
+              due_date: req.body.dueDate,
+              fixed_price: req.body.budget || 0
+            }
+          })
+        }
+      );
+
+      if (!createProjectResponse.ok) {
+        const errorData = await createProjectResponse.json();
+        throw new Error(errorData.message || `Failed to create project: ${createProjectResponse.status}`);
+      }
+
+      const projectData = await createProjectResponse.json();
+      const project = projectData.response.result.project;
+
+      // Format the response
+      const formattedProject = {
+        id: project.id.toString(),
+        title: project.title,
+        description: project.description || '',
+        status: project.complete ? 'Completed' : 'Active',
+        createdAt: new Date(project.created_at * 1000).toISOString()
+      };
+
+      res.status(201).json(formattedProject);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      res.status(400).json({
+        error: "Failed to create project",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Add this new endpoint before the projects routes
+  app.get("/api/clients", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    // Get all users with role "customer"
+    const users = await storage.getUsersByRole("customer");
+    res.json(users);
+  });
+
+  // Projects
+  app.get("/api/projects", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const projects = await storage.getProjects(req.user.id);
+    res.json(projects);
+  });
+
+  app.get("/api/projects/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.id);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
+    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
+    res.json(project);
+  });
+
+  app.post("/api/projects", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const data = insertProjectSchema.parse(req.body);
+    const project = await storage.createProject({
+      ...data,
+      clientId: req.user.id,
+    });
+    res.status(201).json(project);
+  });
+
+  // Invoices
+  app.get("/api/projects/:projectId/invoices", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.projectId);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
+    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
+    const invoices = await storage.getInvoices(project.id);
+    res.json(invoices);
+  });
+
+  app.post("/api/projects/:projectId/invoices", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.projectId);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
+    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
+    const data = insertInvoiceSchema.parse(req.body);
+    const invoice = await storage.createInvoice({
+      ...data,
+      projectId: project.id,
+    });
+    res.status(201).json(invoice);
+  });
+
+  // Documents
+  app.get("/api/projects/:projectId/documents", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.projectId);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
+    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
+    const documents = await storage.getDocuments(project.id);
+    res.json(documents);
+  });
+
+  app.post("/api/projects/:projectId/documents", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const projectId = validateId(req.params.projectId);
+    if (projectId === null) return res.status(400).send("Invalid project ID");
+
+    const project = await storage.getProject(projectId);
+    if (!project || project.clientId !== req.user.id) return res.sendStatus(404);
+    const data = insertDocumentSchema.parse(req.body);
+    const document = await storage.createDocument({
+      ...data,
+      projectId: project.id,
+    });
+    res.status(201).json(document);
+  });
+
+  // Add this debug endpoint with the other Freshbooks routes
+  app.get("/api/freshbooks/debug/clients", requireAdmin, async (req, res) => {
+    try {
+      console.log("Fetching raw Freshbooks client data for debugging");
       const tokens = req.session.freshbooksTokens;
 
       if (!tokens) {
@@ -889,13 +1140,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("No account ID found in user profile");
       }
 
-      // Fetch projects for the client
-      const projectsResponse = await fetch(
-        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects?client_id=${reqreq.params.id}`,
+      // Fetch clients with the account ID
+      const clientsResponse = await fetch(
+        `https://api.freshbooks.com/accounting/account/${accountId}/users/clients`,
         {
           headers: {
             'Authorization': `Bearer ${tokens.access_token}`,
             'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!clientsResponse.ok) {
+        throw new Error(`Failed to fetch clients: ${clientsResponse.status}`);
+      }
+
+      const rawData = await clientsResponse.json();
+      res.json(rawData);
+    } catch (error) {
+      console.error("Debug endpoint error:", error);
+      res.status(500).json({
+        error: "Failed to fetch debug data",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  app.get("/api/freshbooks/clients/:id/projects", async (req, res) => {
+    try {
+      console.log("Fetching projects for client ID:", req.params.id);
+      const tokens = req.session.freshbooksTokens;
+
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the business ID from user profile
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+
+      if (!businessId) {
+        throw new Error("No business ID found in user profile");
+      }
+
+      // Fetch projects using the correct endpoint
+      const projectsResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/projects?client_id=${req.params.id}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`
           }
         }
       );

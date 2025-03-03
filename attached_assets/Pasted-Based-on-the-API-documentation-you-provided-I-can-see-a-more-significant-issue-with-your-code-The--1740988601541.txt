@@ -1,0 +1,74 @@
+Based on the API documentation you provided, I can see a more significant issue with your code. The issue isn't just the typo I mentioned earlier (`reqreq` instead of `req`), but there's also a fundamental problem with the endpoint URL structure you're using.
+
+The Freshbooks Projects API endpoint structure in your code doesn't match the documentation. Here's what's wrong:
+
+1. You're using: 
+   ```javascript
+   `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects?client_id=${reqreq.params.id}`
+   ```
+
+2. According to the documentation, it should be:
+   ```javascript
+   `https://api.freshbooks.com/projects/business/${businessId}/projects`
+   ```
+
+There are three key differences:
+- The base path is `/projects/business/` not `/accounting/account/`
+- You need a business ID, not an account ID
+- The structure of the URL is different
+
+Here's how to fix it:
+
+1. First, you need to get the business ID. Based on your code, you're already retrieving user data that includes business memberships, but you're using account_id instead of business_id:
+
+```javascript
+const meData = await meResponse.json();
+const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+```
+
+You should be getting the business ID:
+
+```javascript
+const businessId = meData.response?.business_memberships?[0]?.business?.id;
+```
+
+2. Then, use the correct endpoint structure for listing projects:
+
+```javascript
+const projectsResponse = await fetch(
+  `https://api.freshbooks.com/projects/business/${businessId}/projects?client_id=${req.params.id}`,
+  {
+    headers: {
+      'Authorization': `Bearer ${tokens.access_token}`,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+```
+
+3. Also, according to the documentation note: "When using GET calls for Projects and Time Tracking, please leave out the Content Type from your header." So you might want to remove that header for GET requests.
+
+If you're creating projects, you would use:
+
+```javascript
+const createProjectResponse = await fetch(
+  `https://api.freshbooks.com/projects/business/${businessId}/project`,
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${tokens.access_token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      project: {
+        title: projectTitle,
+        client_id: clientId,
+        project_type: "fixed_price",  // or "hourly_rate"
+        fixed_price: projectPrice     // or rate if using hourly_rate
+      }
+    })
+  }
+);
+```
+
+Make sure to update all your project-related endpoints to use the correct URL structure as shown in the documentation, and ensure you're getting the business ID rather than the account ID for these endpoints.
