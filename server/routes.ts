@@ -725,13 +725,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this new endpoint before the projects routes
-  app.get("/api/clients", async (req, res) => {
+  // Project Notes 
+  app.get("/api/projects/:id/notes", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
-    // Get all users with role "customer"
-    const users = await storage.getUsersByRole("customer");
-    res.json(users);
+    try {
+      // First try to get project by ID from local database
+      let project;
+      const projectId = validateId(req.params.id);
+      
+      if (projectId !== null) {
+        project = await storage.getProject(projectId);
+      }
+
+      // If not found locally, try to get by Freshbooks ID
+      if (!project) {
+        project = await storage.getProjectByFreshbooksId(req.params.id);
+      }
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const notes = await storage.getProjectNotes(project.id);
+      res.json(notes);
+    } catch (error) {
+      console.error("Error fetching project notes:", error);
+      res.status(500).json({ error: "Failed to fetch project notes" });
+    }
+  });
+
+  app.post("/api/projects/:id/notes", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      // First try to get project by ID from local database
+      let project;
+      const projectId = validateId(req.params.id);
+      
+      if (projectId !== null) {
+        project = await storage.getProject(projectId);
+      }
+
+      // If not found locally, try to get by Freshbooks ID
+      if (!project) {
+        project = await storage.getProjectByFreshbooksId(req.params.id);
+      }
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const note = await storage.createProjectNote({
+        projectId: project.id,
+        content: req.body.content,
+        createdBy: req.user.id
+      });
+      res.status(201).json(note);
+    } catch (error) {
+      console.error("Error creating project note:", error);
+      res.status(500).json({ error: "Failed to create project note" });
+    }
+  });
+
+  // Project Progress Update
+  app.patch("/api/projects/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      // First try to get project by ID from local database
+      let project;
+      const projectId = validateId(req.params.id);
+      
+      if (projectId !== null) {
+        project = await storage.getProject(projectId);
+      }
+
+      // If not found locally, try to get by Freshbooks ID
+      if (!project) {
+        project = await storage.getProjectByFreshbooksId(req.params.id);
+      }
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const { progress } = req.body;
+      if (typeof progress !== 'number' || progress < 0 || progress > 100) {
+        return res.status(400).json({ error: "Progress must be a number between 0 and 100" });
+      }
+
+      const updatedProject = await storage.updateProjectProgress(project.id, progress);
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error updating project progress:", error);
+      res.status(500).json({ error: "Failed to update project progress" });
+    }
+  });
+
+  // File Upload
+  app.post("/api/projects/:id/documents", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      // First try to get project by ID from local database
+      let project;
+      const projectId = validateId(req.params.id);
+      
+      if (projectId !== null) {
+        project = await storage.getProject(projectId);
+      }
+
+      // If not found locally, try to get by Freshbooks ID
+      if (!project) {
+        project = await storage.getProjectByFreshbooksId(req.params.id);
+      }
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      if (!req.files || !req.files.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const file = req.files.file;
+
+      const document = await storage.createDocument({
+        projectId: project.id,
+        name: file.name,
+        content: file.data.toString('base64'),
+        fileSize: file.size,
+        fileType: file.mimetype,
+        uploadedBy: req.user.id
+      });
+
+      res.status(201).json(document);
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      res.status(500).json({ error: "Failed to upload document" });
+    }
   });
 
   // Add this debug endpoint with the other Freshbooks routes
