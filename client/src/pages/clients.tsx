@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Mail, Phone, MapPin, Calendar } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FreshbooksConnect } from "@/components/freshbooks-connect";
 import { CreateClientDialog } from "@/components/create-client-dialog";
 import { EditClientDialog } from "@/components/edit-client-dialog";
 
@@ -35,10 +34,6 @@ export default function ClientsPage() {
           <CreateClientDialog />
         </div>
 
-        <div className="mb-8">
-          <FreshbooksConnect />
-        </div>
-
         {isLoading ? (
           <div className="flex items-center justify-center h-[200px]">
             <Loader2 className="h-8 w-8 animate-spin text-border" />
@@ -52,7 +47,7 @@ export default function ClientsPage() {
         ) : !clients?.length ? (
           <Alert>
             <AlertDescription>
-              No clients found. Make sure you have connected your Freshbooks account and have active clients.
+              No clients found. Create a new client using the button above.
             </AlertDescription>
           </Alert>
         ) : (
