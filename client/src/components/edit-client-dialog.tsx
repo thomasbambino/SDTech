@@ -45,7 +45,9 @@ type EditClientForm = z.infer<typeof clientSchema>;
 interface EditClientDialogProps {
   client: {
     id: string;
-    name: string;
+    firstName?: string;
+    lastName?: string;
+    name?: string;
     organization: string;
     email: string;
     phone: string;
@@ -57,12 +59,19 @@ export function EditClientDialog({ client }: EditClientDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // Split name into first and last name
-  const [firstName, ...lastNameParts] = client.name.split(" ");
-  const lastName = lastNameParts.join(" ");
+  // Handle name based on available fields
+  let firstName = client.firstName;
+  let lastName = client.lastName;
 
-  // Parse address into components
-  const addressParts = client.address.split(", ");
+  // If we have a combined name field, split it
+  if (client.name && !firstName && !lastName) {
+    const nameParts = client.name.split(" ");
+    firstName = nameParts[0] || "";
+    lastName = nameParts.slice(1).join(" ") || "";
+  }
+
+  // Parse address into components if it exists
+  const addressParts = client.address ? client.address.split(", ") : [];
   const [street, street2, city, province, code, country] = addressParts;
 
   const form = useForm<EditClientForm>({
