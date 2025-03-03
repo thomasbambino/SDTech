@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Calendar, DollarSign, Edit2, Save, X } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { queryClient } from "@/lib/queryClient";
@@ -285,10 +283,10 @@ export default function ProjectDetails() {
           <div>
             <h1 className="text-3xl font-bold">{project.title}</h1>
             <p className="text-muted-foreground">
-              Created {formatDate(project.createdAt)}
+              Created {formatDate(project.createdAt?.toString())}
             </p>
           </div>
-          <Badge>{project.status}</Badge>
+          <p className="text-sm text-muted-foreground">{project.status}</p>
         </div>
 
         {/* Progress Section */}
@@ -468,7 +466,6 @@ export default function ProjectDetails() {
                 </div>
               </CardContent>
             </Card>
-
             {/* Project Details Card */}
             <Card>
               <CardHeader>
