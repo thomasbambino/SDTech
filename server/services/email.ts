@@ -21,12 +21,12 @@ export class EmailService {
       // Log attempt to send email
       console.log('Attempting to send email:', {
         to,
-        from: 'SD Tech Pros <noreply@sdtechpros.com>',
+        from: `SD Tech Pros <noreply@${process.env.MAILGUN_DOMAIN}>`,
         domain: process.env.MAILGUN_DOMAIN
       });
 
       const result = await client.messages.create(process.env.MAILGUN_DOMAIN, {
-        from: 'SD Tech Pros <noreply@sdtechpros.com>',
+        from: `SD Tech Pros <noreply@${process.env.MAILGUN_DOMAIN}>`,
         to: [to],
         subject,
         html,
