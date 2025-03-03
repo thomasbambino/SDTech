@@ -8,6 +8,14 @@ import { useToast } from "@/hooks/use-toast";
 import { Edit } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Badge } from "@/components/ui/badge";
+
+interface ProjectService {
+  business_id: number;
+  id: number;
+  name: string;
+  billable?: boolean;
+}
 
 interface EditProjectDialogProps {
   project: {
@@ -18,6 +26,7 @@ interface EditProjectDialogProps {
     clientId: string;
     fixedPrice?: string;
     budget?: number;
+    services?: ProjectService[];
   };
 }
 
@@ -27,6 +36,7 @@ interface ProjectFormData {
   dueDate: string;
   fixedPrice: string;
   budget: string;
+  services: ProjectService[];
 }
 
 export function EditProjectDialog({ project }: EditProjectDialogProps) {
@@ -39,7 +49,8 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
       description: project.description || '',
       dueDate: project.dueDate || '',
       fixedPrice: project.fixedPrice || '',
-      budget: project.budget?.toString() || ''
+      budget: project.budget?.toString() || '',
+      services: project.services || []
     },
   });
 
@@ -57,7 +68,12 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
             due_date: data.dueDate,
             client_id: project.clientId,
             fixed_price: data.fixedPrice,
-            budget: data.budget ? parseInt(data.budget) : undefined
+            budget: data.budget ? parseInt(data.budget) : undefined,
+            services: data.services.map(service => ({
+              business_id: service.business_id,
+              id: service.id,
+              name: service.name
+            }))
           }
         }),
       });
@@ -176,6 +192,19 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
                 </FormItem>
               )}
             />
+            {/* Display existing services */}
+            <div className="space-y-2">
+              <FormLabel>Services</FormLabel>
+              {project.services?.map((service) => (
+                <div key={service.id} className="flex items-center gap-2 p-2 border rounded">
+                  <span>{service.name}</span>
+                  {service.billable && <Badge>Billable</Badge>}
+                </div>
+              ))}
+              {(!project.services || project.services.length === 0) && (
+                <p className="text-sm text-muted-foreground">No services assigned to this project</p>
+              )}
+            </div>
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"
