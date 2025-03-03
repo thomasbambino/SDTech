@@ -71,47 +71,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: inquiryData.email,
         phoneNumber: inquiryData.phoneNumber,
         companyName: inquiryData.companyName,
-        address: inquiryData.address,
         role: "pending",
         isTemporaryPassword: true,
       });
 
-      // Get admin's Freshbooks tokens
-      const adminUser = await storage.getUserByUsername('admin@sdtechpros.com');
-      if (!adminUser) {
-        throw new Error("Admin user not found");
-      }
-
       // Create client in Freshbooks
-      const [firstName, ...lastNameParts] = inquiryData.name.split(" ");
-      const lastName = lastNameParts.join(" ");
-
-      // Format address parts
-      const addressParts = inquiryData.address ? inquiryData.address.split(", ") : [];
-      const [street, city, province, postalCode, country] = addressParts;
-
       const freshbooksClientData = {
-        fname: firstName,
-        lname: lastName || "",
+        fname: inquiryData.firstName,
+        lname: inquiryData.lastName,
         organization: inquiryData.companyName,
         email: inquiryData.email,
         home_phone: inquiryData.phoneNumber,
-        p_street: street || "",
-        p_city: city || "",
-        p_province: province || "",
-        p_code: postalCode || "",
-        p_country: country || "",
         currency_code: "USD",
         language: "en"
       };
 
-      // Create the client in Freshbooks using admin token
-      await freshbooksService.createClient(adminUser.freshbooksToken, {
+      // Create the client in Freshbooks using environment token
+      await freshbooksService.createClient(process.env.FRESHBOOKS_ADMIN_TOKEN!, {
         client: freshbooksClientData
       });
 
-      // TODO: Send email with temporary password
-      // For now, return it in response (only in development)
+      // Return temporary password in response (only in development)
       res.status(201).json({
         message: "Inquiry submitted successfully",
         tempPassword // Remove this in production

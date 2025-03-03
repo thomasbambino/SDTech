@@ -45,19 +45,20 @@ export const documents = pgTable("documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Schema for customer inquiry form
+// Update the inquiry schema to match Freshbooks fields
 export const insertInquirySchema = createInsertSchema(users).pick({
   email: true,
   phoneNumber: true,
   companyName: true,
-  address: true,
 }).extend({
-  name: z.string().min(1, "Name is required"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
   phoneNumber: z.string().optional(),
   companyName: z.string().optional(),
-  address: z.string().optional().describe("Format: street, city, province, postal code, country"),
 });
+
+export type InsertInquiry = z.infer<typeof insertInquirySchema>;
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -89,7 +90,6 @@ export const insertDocumentSchema = createInsertSchema(documents).pick({
   content: true,
 });
 
-export type InsertInquiry = z.infer<typeof insertInquirySchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
