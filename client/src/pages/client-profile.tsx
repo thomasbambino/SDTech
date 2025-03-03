@@ -31,19 +31,15 @@ interface FreshbooksClient {
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
 
-  // Fetch all clients first
-  const { data: clients, isLoading: isLoadingClients, error: clientError } = useQuery<FreshbooksClient[]>({
-    queryKey: ["/api/freshbooks/clients"],
+  const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
+    queryKey: ["/api/freshbooks/clients", id],
   });
-
-  // Find the specific client from the fetched clients
-  const client = clients?.find(c => c.id === id);
 
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ["/api/clients", id, "projects"],
   });
 
-  if (isLoadingClients || isLoadingProjects) {
+  if (isLoadingClient || isLoadingProjects) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -58,9 +54,12 @@ export default function ClientProfile() {
         <div className="container mx-auto px-4 py-8">
           <Alert variant="destructive">
             <AlertDescription>
-              {clientError instanceof Error ? clientError.message : "Failed to load client details"}
+              {clientError instanceof Error ? clientError.message : "Client not found. Please make sure you have access to view this client's details."}
             </AlertDescription>
           </Alert>
+          <Button variant="outline" className="mt-4" asChild>
+            <Link href="/clients">Back to Clients</Link>
+          </Button>
         </div>
       </div>
     );

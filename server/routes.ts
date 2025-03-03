@@ -329,7 +329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/freshbooks/clients", requireAdmin, async (req, res) => {
+  app.get("/api/freshbooks/clients", async (req, res) => {
     try {
       console.log("Checking Freshbooks session tokens");
       const tokens = req.session.freshbooksTokens;
