@@ -45,10 +45,18 @@ export default function Dashboard() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  // Fetch client details if the user has a Freshbooks ID
+  // Update the client query to handle connection status
   const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", user?.freshbooksId],
     queryFn: async () => {
+      // First check Freshbooks connection status
+      const statusResponse = await fetch('/api/freshbooks/connection-status');
+      const statusData = await statusResponse.json();
+
+      if (!statusData.isConnected) {
+        throw new Error("Freshbooks is not connected. Please contact an administrator.");
+      }
+
       const response = await fetch(`/api/freshbooks/clients/${user?.freshbooksId}`);
       if (!response.ok) {
         const errorData = await response.json();
@@ -59,18 +67,18 @@ export default function Dashboard() {
     enabled: !!user?.freshbooksId && user?.role === 'customer'
   });
 
-  // Fetch projects for the client
+  // Update the projects query to use the main projects endpoint
   const { data: projects, isLoading: isLoadingProjects, error: projectsError } = useQuery<Project[]>({
-    queryKey: ["/api/freshbooks/clients", user?.freshbooksId, "projects"],
+    queryKey: ["/api/projects"],
     queryFn: async () => {
-      const response = await fetch(`/api/freshbooks/clients/${user?.freshbooksId}/projects`);
+      const response = await fetch(`/api/projects`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Error: ${response.status}`);
       }
       return response.json();
     },
-    enabled: !!client // Only fetch projects if client data is loaded
+    enabled: !!user // Only fetch if user is logged in
   });
 
   if (isLoadingClient) {
