@@ -138,11 +138,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProjectByFreshbooksId(freshbooksId: string): Promise<Project | undefined> {
-    const results = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.freshbooksId, freshbooksId));
-    return results[0];
+    try {
+      const results = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.freshbooksId, Number(freshbooksId)));
+      return results[0];
+    } catch (error) {
+      console.error('Error in getProjectByFreshbooksId:', error);
+      return undefined;
+    }
   }
 
   async getProjectNotes(projectId: number): Promise<ProjectNote[]> {
