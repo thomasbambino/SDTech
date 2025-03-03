@@ -8,8 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Edit } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 
 interface EditProjectDialogProps {
   project: {
@@ -18,18 +16,6 @@ interface EditProjectDialogProps {
     description?: string;
     dueDate?: string;
     clientId: string;
-    billingMethod?: string;
-    projectType?: string;
-    fixedPrice?: string;
-    budget?: number;
-    rate?: string;
-    internal?: boolean;
-    complete?: boolean;
-    services?: Array<{
-      id: number;
-      name: string;
-      billable: boolean;
-    }>;
   };
 }
 
@@ -37,13 +23,6 @@ interface ProjectFormData {
   title: string;
   description: string;
   dueDate: string;
-  fixedPrice: string;
-  budget: string;
-  rate: string;
-  billingMethod: string;
-  projectType: string;
-  internal: boolean;
-  complete: boolean;
 }
 
 export function EditProjectDialog({ project }: EditProjectDialogProps) {
@@ -55,13 +34,6 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
       title: project.title,
       description: project.description || '',
       dueDate: project.dueDate || '',
-      fixedPrice: project.fixedPrice || '',
-      budget: project.budget?.toString() || '',
-      rate: project.rate || '',
-      billingMethod: project.billingMethod || 'project_rate',
-      projectType: project.projectType || 'fixed_price',
-      internal: project.internal || false,
-      complete: project.complete || false,
     },
   });
 
@@ -77,13 +49,6 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
             title: data.title,
             description: data.description,
             due_date: data.dueDate,
-            fixed_price: data.fixedPrice,
-            budget: parseInt(data.budget) || undefined,
-            rate: data.rate,
-            billing_method: data.billingMethod,
-            project_type: data.projectType,
-            internal: data.internal,
-            complete: data.complete,
             client_id: project.clientId
           }
         }),
@@ -121,7 +86,7 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
           <Edit className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit Project</DialogTitle>
         </DialogHeader>
@@ -166,133 +131,6 @@ export function EditProjectDialog({ project }: EditProjectDialogProps) {
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="projectType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Project Type</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select project type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="fixed_price">Fixed Price</SelectItem>
-                        <SelectItem value="hourly_rate">Hourly Rate</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="billingMethod"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Billing Method</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select billing method" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="project_rate">Project Rate</SelectItem>
-                        <SelectItem value="hourly">Hourly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="fixedPrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fixed Price</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Budget</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <FormField
-              control={form.control}
-              name="rate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Hourly Rate</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.01" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="internal"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Internal Project</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="complete"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Mark as Complete</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"
