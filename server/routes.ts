@@ -403,6 +403,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update the single client fetch endpoint
+  app.get("/api/freshbooks/clients/:id", async (req, res) => {
+    try {
+      const tokens = req.session.freshbooksTokens;
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the account ID
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+      if (!accountId) {
+        throw new Error("No account ID found in user profile");
+      }
+
+      // Fetch single client with the account ID
+      const clientResponse = await fetch(
+        `https://api.freshbooks.com/accounting/account/${accountId}/users/clients/${req.params.id}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!clientResponse.ok) {
+        throw new Error(`Failed to fetch client: ${clientResponse.status}`);
+      }
+
+      const rawData = await clientResponse.json();
+      res.json(rawData);
+    } catch (error) {
+      console.error("Error fetching client:", error);
+      res.status(500).json({
+        error: "Failed to fetch client",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/freshbooks/connection-status", requireAdmin, async (req, res) => {
     try {
       const isConnected = !!req.session.freshbooksTokens?.access_token;

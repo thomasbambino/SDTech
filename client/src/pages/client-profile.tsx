@@ -34,10 +34,22 @@ export default function ClientProfile() {
 
   const { data: client, isLoading: isLoadingClient } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", id],
+    onSuccess: (data) => {
+      console.log("Received client data:", data); // Debug log
+    },
+    onError: (error) => {
+      console.error("Error fetching client:", error); // Debug log
+    }
   });
 
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ["/api/clients", id, "projects"],
+    onSuccess: (data) => {
+      console.log("Received projects data:", data); // Debug log
+    },
+    onError: (error) => {
+      console.error("Error fetching projects:", error); // Debug log
+    }
   });
 
   if (isLoadingClient || isLoadingProjects) {
