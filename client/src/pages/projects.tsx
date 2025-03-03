@@ -13,6 +13,7 @@ import { Link } from "wouter";
 import { Loader2, Calendar, DollarSign } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
+import { useAuth } from "@/hooks/use-auth";
 
 interface Project {
   id: string;
@@ -27,16 +28,25 @@ interface Project {
 }
 
 export default function Projects() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  // Use different endpoints based on user role
+  const endpoint = isAdmin ? "/api/freshbooks/projects" : `/api/projects/user/${user?.id}`;
+
   const { data: projects, isLoading, error } = useQuery<Project[]>({
-    queryKey: ["/api/freshbooks/projects"],
+    queryKey: [endpoint],
     queryFn: async () => {
-      const response = await fetch("/api/freshbooks/projects");
+      const response = await fetch(endpoint, {
+        credentials: 'include'
+      });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Error: ${response.status}`);
       }
       return response.json();
-    }
+    },
+    enabled: !!user // Only fetch when user is loaded
   });
 
   if (isLoading) {
@@ -71,13 +81,15 @@ export default function Projects() {
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">Projects</h1>
-          <CreateProjectDialog />
+          {isAdmin && <CreateProjectDialog />}
         </div>
 
         {!projects?.length ? (
           <Alert>
             <AlertDescription>
-              No projects found. Create a new project using the button above.
+              {isAdmin 
+                ? "No projects found. Create a new project using the button above."
+                : "No projects assigned to you yet."}
             </AlertDescription>
           </Alert>
         ) : (
