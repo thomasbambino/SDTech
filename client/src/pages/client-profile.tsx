@@ -30,16 +30,23 @@ interface FreshbooksClient {
 
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
+  console.log("Profile page - Client ID from URL:", id); // Debug log
 
-  // Use the same query as the clients page
   const { data: clients, isLoading: isLoadingClients, error: clientsError } = useQuery<FreshbooksClient[]>({
-    queryKey: ["/api/freshbooks/clients"]
+    queryKey: ["/api/freshbooks/clients"],
+    onSuccess: (data) => {
+      console.log("Profile page - All clients:", data); // Debug log
+    }
   });
 
   // Find the specific client from the list
-  const client = clients?.find(c => c.id === id);
+  const client = clients?.find(c => {
+    console.log("Profile page - Comparing IDs:", { urlId: id, clientId: c.id }); // Debug log
+    return c.id === id;
+  });
 
-  // Projects query
+  console.log("Profile page - Found client:", client); // Debug log
+
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ["/api/clients", id, "projects"],
     enabled: !!client
@@ -60,7 +67,7 @@ export default function ClientProfile() {
         <div className="container mx-auto px-4 py-8">
           <Alert variant="destructive">
             <AlertDescription>
-              {clientsError instanceof Error ? clientsError.message : "Client not found"}
+              {clientsError instanceof Error ? clientsError.message : `Client not found for ID: ${id}`}
             </AlertDescription>
           </Alert>
           <Button variant="outline" className="mt-4" asChild>

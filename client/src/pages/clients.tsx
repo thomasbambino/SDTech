@@ -24,10 +24,7 @@ export default function ClientsPage() {
   const { data: clients, isLoading, error } = useQuery<FreshbooksClient[]>({
     queryKey: ["/api/freshbooks/clients"],
     onSuccess: (data) => {
-      console.log("Fetched clients:", data); // Debug log
-    },
-    onError: (error) => {
-      console.error("Error fetching clients:", error); // Debug log
+      console.log("Clients list data:", data); // Debug log
     }
   });
 
@@ -58,55 +55,58 @@ export default function ClientsPage() {
           </Alert>
         ) : (
           <div className="grid gap-4">
-            {clients.map((client) => (
-              <Card key={client.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-semibold mb-1">{client.name}</h2>
-                        <EditClientDialog client={client} />
+            {clients.map((client) => {
+              console.log("Client card ID:", client.id); // Debug log for each client's ID
+              return (
+                <Card key={client.id}>
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-xl font-semibold mb-1">{client.name}</h2>
+                          <EditClientDialog client={client} />
+                        </div>
+                        {client.organization && (
+                          <p className="text-sm text-muted-foreground">{client.organization}</p>
+                        )}
                       </div>
-                      {client.organization && (
-                        <p className="text-sm text-muted-foreground">{client.organization}</p>
+                      <Badge variant={client.status === 'Active' ? 'default' : 'secondary'}>
+                        {client.status}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2 text-sm text-muted-foreground mb-4">
+                      {client.email && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4" />
+                          <span>{client.email}</span>
+                        </div>
                       )}
+                      {client.phone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4" />
+                          <span>{client.phone}</span>
+                        </div>
+                      )}
+                      {client.address && (
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          <span>{client.address}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        <span>Created: {client.createdDate}</span>
+                      </div>
                     </div>
-                    <Badge variant={client.status === 'Active' ? 'default' : 'secondary'}>
-                      {client.status}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                    {client.email && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4" />
-                        <span>{client.email}</span>
-                      </div>
-                    )}
-                    {client.phone && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4" />
-                        <span>{client.phone}</span>
-                      </div>
-                    )}
-                    {client.address && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        <span>{client.address}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      <span>Created: {client.createdDate}</span>
-                    </div>
-                  </div>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href={`/clients/${client.id}`}>
-                      View Profile & Projects
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                    <Button asChild variant="outline" className="w-full">
+                      <Link href={`/clients/${client.id}`}>
+                        View Profile & Projects
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
