@@ -236,6 +236,36 @@ export class FreshbooksService {
       return [];
     }
   }
+
+  // Add this method to the FreshbooksService class
+  async createClient(accessToken: string, clientData: any) {
+    try {
+      const accountId = await this.getBusinessId(accessToken);
+      console.log("Creating client for account:", accountId);
+
+      const response = await fetch(
+        `${this.baseUrl}/accounting/account/${accountId}/users/clients`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ client: clientData })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to create client: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return formatClientData([data.response.result.client])[0];
+    } catch (error) {
+      console.error("Error creating client:", error);
+      throw error;
+    }
+  }
 }
 
 export const freshbooksService = new FreshbooksService();

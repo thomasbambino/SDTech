@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Mail, Phone, MapPin, Calendar } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FreshbooksConnect } from "@/components/freshbooks-connect";
+import { CreateClientDialog } from "@/components/create-client-dialog";
 
 interface FreshbooksClient {
   id: string;
@@ -28,7 +29,10 @@ export default function ClientsPage() {
     <div className="min-h-screen bg-background">
       <NavBar />
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-8">Freshbooks Clients</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">Freshbooks Clients</h1>
+          <CreateClientDialog />
+        </div>
 
         <div className="mb-8">
           <FreshbooksConnect />

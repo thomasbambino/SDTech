@@ -231,6 +231,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add this endpoint with the other Freshbooks routes
+  app.post("/api/freshbooks/clients", requireAdmin, async (req, res) => {
+    try {
+      const tokens = req.session.freshbooksTokens;
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      const client = await freshbooksService.createClient(tokens.access_token, req.body.client);
+      res.status(201).json(client);
+    } catch (error) {
+      console.error("Error creating client:", error);
+      res.status(500).json({
+        error: "Failed to create client",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/freshbooks/connection-status", requireAdmin, async (req, res) => {
     try {
       const isConnected = !!req.session.freshbooksTokens?.access_token;
