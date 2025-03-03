@@ -32,9 +32,9 @@ export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
   console.log("Loading client profile for ID:", id);
 
-  // Updated query to use the correct endpoint structure
+  // Updated query to use consistent query keys
   const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
-    queryKey: ["client", id],
+    queryKey: ["/api/freshbooks/clients", id],
     queryFn: async () => {
       console.log(`Fetching client with ID: ${id}`);
       const response = await fetch(`/api/freshbooks/clients/${id}`);
@@ -43,17 +43,11 @@ export default function ClientProfile() {
         throw new Error(errorData.error || `Error: ${response.status}`);
       }
       return response.json();
-    },
-    onSuccess: (data) => {
-      console.log("Received client data:", data);
-    },
-    onError: (error) => {
-      console.error("Error loading client:", error);
     }
   });
 
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
-    queryKey: ["projects", id],
+    queryKey: ["/api/freshbooks/clients", id, "projects"],
     queryFn: async () => {
       const response = await fetch(`/api/freshbooks/clients/${id}/projects`);
       if (!response.ok) {

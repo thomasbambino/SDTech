@@ -101,7 +101,10 @@ export function EditClientDialog({ client }: EditClientDialogProps) {
       return res.json();
     },
     onSuccess: () => {
+      // Invalidate both the clients list and the individual client
       queryClient.invalidateQueries({ queryKey: ["/api/freshbooks/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/freshbooks/clients", client.id] });
+
       toast({
         title: "Success",
         description: "Client updated successfully",
@@ -304,7 +307,7 @@ export function EditClientDialog({ client }: EditClientDialogProps) {
                   Updating...
                 </>
               ) : (
-                'Update Client'
+                "Update Client"
               )}
             </Button>
           </form>
