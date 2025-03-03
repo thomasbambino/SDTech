@@ -8,6 +8,7 @@ import { Loader2, Mail, Phone, MapPin, Calendar, DollarSign } from "lucide-react
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EditClientDialog } from "@/components/edit-client-dialog";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
+import { EditProjectDialog } from "@/components/edit-project-dialog";
 
 interface Project {
   id: string;
@@ -186,9 +187,12 @@ export default function ClientProfile() {
                             Created {new Date(project.createdAt).toLocaleString()}
                           </CardDescription>
                         </div>
-                        <Badge variant={project.status === 'Active' ? 'default' : 'secondary'}>
-                          {project.status}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <EditProjectDialog project={project} />
+                          <Badge variant={project.status === 'Active' ? 'default' : 'secondary'}>
+                            {project.status}
+                          </Badge>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>

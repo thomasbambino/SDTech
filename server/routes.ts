@@ -908,8 +908,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (!projectsResponse.ok) {
-        const errorText = await projectsResponse.text();
-        console.error("Projects API error response:", errorText);
+        // If no projects found, return empty array instead of error
+        if (projectsResponse.status === 404) {
+          return res.json([]);
+        }
         throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
       }
 
@@ -945,99 +947,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add project creation endpoint
-  app.post("/api/freshbooks/clients/:id/projects", async (req, res) => {
+  // Add this new endpoint for updating projects
+  app.put("/api/freshbooks/projects/:id", requireAdmin, async (req, res) => {
     try {
       const tokens = req.session.freshbooksTokens;
-      if (!tokens) {
-        return res.status(401).json({
-          error: "Freshbooks not connected",
-          details: "Please connect your Freshbooks account first"
-        });
-      }
-
-      // Get the business ID
-      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
-        headers: {
-          'Authorization': `Bearer ${tokens.access_token}`
-        }
-      });
-
-      if (!meResponse.ok) {
-        throw new Error(`Failed to get user details: ${meResponse.status}`);
-      }
-
-      const meData = await meResponse.json();
-      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
-
-      if (!businessId) {
-        throw new Error("No business ID found in user profile");
-      }
-
-      // Create project using the correct endpoint
-      const createProjectResponse = await fetch(
-        `https://api.freshbooks.com/projects/business/${businessId}/project`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${tokens.access_token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            project: {
-              title: req.body.title,
-              description: req.body.description,
-              client_id: req.params.id,
-              project_type: "fixed_price", // or hourly_rate based on your needs
-              due_date: req.body.dueDate,
-              fixed_price: req.body.budget || 0
-            }
-          })
-        }
-      );
-
-      if (!createProjectResponse.ok) {
-        const errorData = await createProjectResponse.json();
-        throw new Error(errorData.message || `Failed to create project: ${createProjectResponse.status}`);
-      }
-
-      const projectData = await createProjectResponse.json();
-      const project = projectData.response.result.project;
-
-      // Format the response
-      const formattedProject = {
-        id: project.id.toString(),
-        title: project.title,
-        description: project.description || '',
-        status: project.complete ? 'Completed' : 'Active',
-        createdAt: new Date(project.created_at * 1000).toISOString()
-      };
-
-      res.status(201).json(formattedProject);
-    } catch (error) {
-      console.error("Error creating project:", error);
-      res.status(400).json({
-        error: "Failed to create project",
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-
-  // Add this new endpoint before the projects routes
-  app.get("/api/clients", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-
-    // Get all users with role "customer"
-    const users = await storage.getUsersByRole("customer");
-    res.json(users);
-  });
-
-  // Add this debug endpoint with the other Freshbooks routes
-  app.get("/api/freshbooks/debug/projects", requireAdmin, async (req, res) => {
-    try {
-      console.log("Fetching raw Freshbooks project data for debugging");
-      const tokens = req.session.freshbooksTokens;
-
       if (!tokens) {
         return res.status(401).json({
           error: "Freshbooks not connected",
@@ -1063,31 +976,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("No business ID found in user profile");
       }
 
-      console.log("Using business ID:", businessId);
-
-      // Fetch all projects using the correct endpoint
-      const projectsResponse = await fetch(
-        `https://api.freshbooks.com/projects/business/${businessId}/projects`,
+      // Update project using the correct endpoint
+      const updateResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/project/${req.params.id}`,
         {
+          method: 'PUT',
           headers: {
-            'Authorization': `Bearer ${tokens.access_token}`
-          }
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            project: req.body.project
+          })
         }
       );
 
-      if (!projectsResponse.ok) {
-        const errorText = await projectsResponse.text();
-        console.error("Projects API error response:", errorText);
-        throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
+      if (!updateResponse.ok) {
+        const errorText = await updateResponse.text();
+        console.error("Project update error response:", errorText);
+        throw new Error(`Failed to update project: ${updateResponse.status}`);
       }
 
-      const rawData = await projectsResponse.json();
-      console.log("Raw projects response:", JSON.stringify(rawData, null, 2));
-      res.json(rawData);
+      const updatedProject = await updateResponse.json();
+
+      // Format the response
+      const formattedProject = {
+        id: updatedProject.project.id.toString(),
+        title: updatedProject.project.title,
+        description: updatedProject.project.description || '',
+        status: updatedProject.project.complete ? 'Completed' : 'Active',
+        dueDate: updatedProject.project.due_date,
+        budget: updatedProject.project.budget,
+        fixedPrice: updatedProject.project.fixed_price,
+        createdAt: updatedProject.project.created_at,
+        clientId: updatedProject.project.client_id.toString()
+      };
+
+      res.json(formattedProject);
     } catch (error) {
-      console.error("Debug endpoint error:", error);
+      console.error("Error updating project:", error);
       res.status(500).json({
-        error: "Failed to fetch debug data",
+        error: "Failed to update project",
         details: error instanceof Error ? error.message : String(error)
       });
     }
@@ -1308,6 +1237,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching client projects:", error);
       res.status(500).json({
         error: "Failed to fetch client projects",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Add project creation endpoint
+  app.post("/api/freshbooks/clients/:id/projects", async (req, res) => {
+    try {
+      const tokens = req.session.freshbooksTokens;
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the business ID
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+
+      if (!businessId) {
+        throw new Error("No business ID found in user profile");
+      }
+
+      // Create project using the correct endpoint
+      const createProjectResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/project`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            project: {
+              title: req.body.title,
+              description: req.body.description,
+              client_id: req.params.id,
+              project_type: "fixed_price", // or hourly_rate based on your needs
+              due_date: req.body.dueDate,
+              fixed_price: req.body.budget || 0
+            }
+          })
+        }
+      );
+
+      if (!createProjectResponse.ok) {
+        const errorData = await createProjectResponse.json();
+        throw new Error(errorData.message || `Failed to create project: ${createProjectResponse.status}`);
+      }
+
+      const projectData = await createProjectResponse.json();
+      const project = projectData.response.result.project;
+
+      // Format the response
+      const formattedProject = {
+        id: project.id.toString(),
+        title: project.title,
+        description: project.description || '',
+        status: project.complete ? 'Completed' : 'Active',
+        createdAt: new Date(project.created_at * 1000).toISOString()
+      };
+
+      res.status(201).json(formattedProject);
+    } catch (error) {
+      console.error("Error creating project:", error);
+      res.status(400).json({
+        error: "Failed to create project",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Add this new endpoint before the projects routes
+  app.get("/api/clients", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    // Get all users with role "customer"
+    const users = await storage.getUsersByRole("customer");
+    res.json(users);
+  });
+
+  // Add this debug endpoint with the other Freshbooks routes
+  app.get("/api/freshbooks/debug/projects", requireAdmin, async (req, res) => {
+    try {
+      console.log("Fetching raw Freshbooks project data for debugging");
+      const tokens = req.session.freshbooksTokens;
+
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the business ID from user profile
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+
+      if (!businessId) {
+        throw new Error("No business ID found in user profile");
+      }
+
+      console.log("Using business ID:", businessId);
+
+      // Fetch all projects using the correct endpoint
+      const projectsResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/projects`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`
+          }
+        }
+      );
+
+      if (!projectsResponse.ok) {
+        const errorText = await projectsResponse.text();
+        console.error("Projects API error response:", errorText);
+        throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
+      }
+
+      const rawData = await projectsResponse.json();
+      console.log("Raw projects response:", JSON.stringify(rawData, null, 2));
+      res.json(rawData);
+    } catch (error) {
+      console.error("Debug endpoint error:", error);
+      res.status(500).json({
+        error: "Failed to fetch debug data",
         details: error instanceof Error ? error.message : String(error)
       });
     }
