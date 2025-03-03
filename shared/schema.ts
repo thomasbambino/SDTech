@@ -103,7 +103,9 @@ export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   companyName: true,
   phoneNumber: true,
-  address: true,
+  role: true,
+  isTemporaryPassword: true,
+  freshbooksId: true,
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoices).pick({

@@ -212,10 +212,13 @@ export class DatabaseStorage implements IStorage {
   }
   async getUserByFreshbooksId(freshbooksId: string): Promise<User | undefined> {
     try {
+      console.log("Looking up user by Freshbooks ID:", freshbooksId);
       const results = await db
         .select()
         .from(users)
         .where(eq(users.freshbooksId, freshbooksId));
+
+      console.log("Query results:", results);
       return results[0];
     } catch (error) {
       console.error('Error in getUserByFreshbooksId:', error);

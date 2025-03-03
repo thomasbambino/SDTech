@@ -610,18 +610,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      type FreshbooksClient = {
-        id: string;
-        email: string;
-        fname: string; 
-        lname: string;
-        organization: string;
-        home_phone: string;
-      };
+      // Create client in Freshbooks
+      const fbClient = await freshbooksService.createClient(tokens.access_token, req.body.client);
+      console.log("Created Freshbooks client:", fbClient);
 
-      // Create client in Freshbooks and cast to expected type
-      const fbClient = await freshbooksService.createClient(tokens.access_token, req.body.client) as FreshbooksClient;
-      
       if (!fbClient.email) {
         throw new Error("Client must have an email address");
       }
@@ -635,12 +627,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         username: fbClient.email,
         password: hashedPassword,
         email: fbClient.email,
-        companyName: fbClient.organization,
-        phoneNumber: fbClient.home_phone,
-        isTemporaryPassword: true
+        companyName: fbClient.organization || '',
+        phoneNumber: fbClient.phone || '',
+        role: 'customer',
+        isTemporaryPassword: true,
+        freshbooksId: fbClient.id.toString()
       });
 
-      // Return both the Freshbooks client and the temporary password
+      console.log("Created local user:", {
+        id: user.id,
+        email: user.email,
+        freshbooksId: user.freshbooksId
+      });
+
       res.status(201).json({
         client: fbClient,
         tempPassword // Only included in development
@@ -775,28 +774,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(users);
   });
 
-  // Add new client password reset endpoint
+  // Handle password reset for existing clients
   app.post("/api/freshbooks/clients/:id/reset-password", requireAdmin, async (req, res) => {
     try {
+      console.log("Attempting to reset password for Freshbooks client:", req.params.id);
+      
+      // Get the client's user account
+      const user = await storage.getUserByFreshbooksId(req.params.id);
+      console.log("Found user by Freshbooks ID:", user);
+
       // Generate a temporary password
       const tempPassword = generateTemporaryPassword();
       const hashedPassword = await storage.hashPassword(tempPassword);
 
-      // Get the client's user account
-      const client = await storage.getUserByFreshbooksId(req.params.id);
-      if (!client) {
-        return res.status(404).json({ error: "Client not found" });
+      if (!user) {
+        // If no user exists yet, create one using Freshbooks data
+        const tokens = req.session.freshbooksTokens;
+        if (!tokens) {
+          return res.status(401).json({ error: "Freshbooks authentication required" });
+        }
+
+        // Get client details from Freshbooks
+        const accountId = await freshbooksService.getBusinessId(tokens.access_token);
+        const clientResponse = await fetch(
+          `${freshbooksService.baseUrl}/accounting/account/${accountId}/users/clients/${req.params.id}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${tokens.access_token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!clientResponse.ok) {
+          throw new Error(`Failed to fetch client from Freshbooks: ${clientResponse.status}`);
+        }
+
+        const clientData = await clientResponse.json();
+        const client = clientData.response.result.client;
+        console.log("Retrieved Freshbooks client data:", client);
+
+        // Create new user account
+        const newUser = await storage.createUser({
+          username: client.email,
+          password: hashedPassword,
+          email: client.email,
+          companyName: client.organization || '',
+          phoneNumber: client.home_phone || '',
+          role: 'customer',
+          isTemporaryPassword: true,
+          freshbooksId: req.params.id
+        });
+
+        console.log("Created new user account:", {
+          id: newUser.id,
+          email: newUser.email,
+          freshbooksId: newUser.freshbooksId
+        });
+
+        res.json({
+          message: "New user account created with temporary password",
+          tempPassword // Only included in development
+        });
+      } else {
+        // Update existing user's password
+        await storage.updateUserPassword(user.id, hashedPassword, true);
+        console.log("Reset password for existing user:", {
+          id: user.id,
+          email: user.email,
+          freshbooksId: user.freshbooksId
+        });
+
+        res.json({
+          message: "Password reset successful",
+          tempPassword // Only included in development
+        });
       }
-
-      // Update the user's password
-      await storage.updateUserPassword(client.id, hashedPassword, true);
-
-      // TODO: In production, send email to client.email with tempPassword
-      // For development, return the temporary password in response
-      res.json({
-        message: "Password reset successful. A temporary password has been sent to the client's email.",
-        tempPassword // Only included in development
-      });
     } catch (error) {
       console.error("Error resetting client password:", error);
       res.status(500).json({
