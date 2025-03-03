@@ -691,6 +691,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: new Date().toISOString()
       };
 
+      // Convert createdAt to proper date string format
+      data.createdAt = data.createdAt.split('.')[0].replace('T', ' ');
+
       const project = await storage.createProject(data);
       res.status(201).json(project);
     } catch (error) {
@@ -888,7 +891,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Fetch projects for the client
       const projectsResponse = await fetch(
-        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects?client_id=${req.params.id}`,
+        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects?client_id=${reqreq.params.id}`,
         {
           headers: {
             'Authorization': `Bearer ${tokens.access_token}`,
