@@ -1,3 +1,25 @@
+I can see a few issues with your TypeScript/Node.js email service code using Mailgun. Here are the problems:
+
+1. The `sendEmail` method is marked as `private`, but it's being called by the public `sendPasswordResetEmail` method. This is not necessarily wrong, but it means you can only send emails through the specific methods you create (like `sendPasswordResetEmail`).
+
+2. More importantly, there's an issue with how you're initializing Mailgun. The correct import and initialization should be:
+
+```typescript
+import formData from 'form-data';
+import Mailgun from 'mailgun.js';
+
+const mailgun = new Mailgun(formData);
+```
+
+Note the lowercase `formData` instead of `FormData`. The package name is 'form-data' but you typically import it as lowercase.
+
+3. The non-null assertion operator (`!`) on environment variables doesn't guarantee they exist at runtime. You should add validation to check if these environment variables are defined.
+
+4. You're not exporting the `EmailService` constructor, only the singleton instance `emailService`.
+
+Here's a corrected version:
+
+```typescript
 import formData from 'form-data';
 import Mailgun from 'mailgun.js';
 
@@ -51,3 +73,4 @@ export class EmailService {
 }
 
 export const emailService = new EmailService();
+```
