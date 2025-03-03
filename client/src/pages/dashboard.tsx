@@ -6,7 +6,6 @@ import { Project, Invoice } from "@shared/schema";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { FileText, DollarSign } from "lucide-react";
-import { FreshbooksConnect } from "@/components/freshbooks-connect";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -24,10 +23,6 @@ export default function Dashboard() {
       <NavBar />
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Welcome back, {user?.companyName}</h1>
-
-        <div className="mb-8">
-          <FreshbooksConnect />
-        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
