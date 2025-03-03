@@ -451,12 +451,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rawData = await clientResponse.json();
       const clientData = rawData.response.result.client;
 
-      // Convert timestamp to date string
+      // Debug logging for date fields
+      console.log("Date fields from API:", {
+        signup_date: clientData.signup_date,
+        updated: clientData.updated,
+        created_at: clientData.created_at
+      });
+
+      // Enhanced date formatting function with better error handling
       const formatDate = (timestamp: number | null | undefined) => {
-        if (!timestamp) return 'Date not available';
-        // Multiply by 1000 to convert seconds to milliseconds
-        const date = new Date(timestamp * 1000);
-        return date.toLocaleDateString();
+        try {
+          if (!timestamp) return 'Date not available';
+          // Make sure timestamp is a number
+          const numericTimestamp = Number(timestamp);
+          if (isNaN(numericTimestamp)) return 'Invalid date';
+          // Convert seconds to milliseconds and format
+          return new Date(numericTimestamp * 1000).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+        } catch (error) {
+          console.error('Error formatting date:', error);
+          return 'Date formatting error';
+        }
       };
 
       const formattedClient = {
@@ -474,9 +492,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clientData.p_country
         ].filter(Boolean).join(", "),
         status: clientData.vis_state === 0 ? "Active" : "Inactive",
-        createdDate: formatDate(clientData.signup_date || clientData.updated)
+        // Try different date fields in order of preference
+        createdDate: formatDate(clientData.signup_date) !== 'Date not available' 
+          ? formatDate(clientData.signup_date)
+          : formatDate(clientData.created_at) !== 'Date not available'
+          ? formatDate(clientData.created_at)
+          : formatDate(clientData.updated)
       };
 
+      console.log("Formatted client data:", formattedClient);
       res.json(formattedClient);
     } catch (error) {
       console.error("Error fetching client:", error);
