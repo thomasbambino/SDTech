@@ -2,8 +2,10 @@ import { pgTable, text, serial, integer, timestamp, boolean, pgEnum } from "driz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Keep existing enums
 export const userRoleEnum = pgEnum("user_role", ["pending", "customer", "admin"]);
 
+// Keep existing user table
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -21,6 +23,7 @@ export const users = pgTable("users", {
   inquiryDetails: text("inquiry_details"),
 });
 
+// Update projects table to include progress tracking
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -28,8 +31,34 @@ export const projects = pgTable("projects", {
   clientId: integer("client_id").references(() => users.id),
   status: text("status").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
+  progress: integer("progress").default(0), // Add progress field (0-100)
+  freshbooksId: text("freshbooks_id").unique(), // Link to Freshbooks project
 });
 
+// Add project notes table
+export const projectNotes = pgTable("project_notes", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  createdBy: integer("created_by").references(() => users.id),
+});
+
+// Update documents table with additional fields
+export const documents = pgTable("documents", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id),
+  name: text("name").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+  fileSize: integer("file_size"), // Add file size tracking
+  fileType: text("file_type"), // Add file type tracking
+  uploadedBy: integer("uploaded_by").references(() => users.id),
+});
+
+// Keep existing invoice table
 export const invoices = pgTable("invoices", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").references(() => projects.id),
@@ -40,12 +69,48 @@ export const invoices = pgTable("invoices", {
   freshbooksId: text("freshbooks_id").unique(),
 });
 
-export const documents = pgTable("documents", {
-  id: serial("id").primaryKey(),
-  projectId: integer("project_id").references(() => projects.id),
-  name: text("name").notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+// Add insert schemas for new tables
+export const insertProjectNoteSchema = createInsertSchema(projectNotes).pick({
+  projectId: true,
+  content: true,
+  createdBy: true,
+});
+
+// Update existing insert schemas
+export const insertProjectSchema = createInsertSchema(projects).pick({
+  title: true,
+  description: true,
+  clientId: true,
+  status: true,
+  progress: true,
+  freshbooksId: true,
+});
+
+export const insertDocumentSchema = createInsertSchema(documents).pick({
+  projectId: true,
+  name: true,
+  content: true,
+  fileSize: true,
+  fileType: true,
+  uploadedBy: true,
+});
+
+// Keep other existing schemas
+export const insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
+  email: true,
+  companyName: true,
+  phoneNumber: true,
+  address: true,
+});
+
+export const insertInvoiceSchema = createInsertSchema(invoices).pick({
+  projectId: true,
+  amount: true,
+  status: true,
+  dueDate: true,
+  freshbooksId: true,
 });
 
 // Update the inquiry schema to match Freshbooks fields
@@ -62,43 +127,16 @@ export const insertInquirySchema = createInsertSchema(users).pick({
   details: z.string().min(1, "Please provide details about your inquiry"),
 });
 
-export type InsertInquiry = z.infer<typeof insertInquirySchema>;
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  email: true,
-  companyName: true,
-  phoneNumber: true,
-  address: true,
-});
-
-export const insertProjectSchema = createInsertSchema(projects).pick({
-  title: true,
-  description: true,
-  clientId: true,
-  status: true,
-});
-
-export const insertInvoiceSchema = createInsertSchema(invoices).pick({
-  projectId: true,
-  amount: true,
-  status: true,
-  dueDate: true,
-  freshbooksId: true,
-});
-
-export const insertDocumentSchema = createInsertSchema(documents).pick({
-  projectId: true,
-  name: true,
-  content: true,
-});
-
+// Export types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
-export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type InsertProjectNote = z.infer<typeof insertProjectNoteSchema>;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type InsertInquiry = z.infer<typeof insertInquirySchema>;
+
 export type User = typeof users.$inferSelect;
 export type Project = typeof projects.$inferSelect;
-export type Invoice = typeof invoices.$inferSelect;
+export type ProjectNote = typeof projectNotes.$inferSelect;
 export type Document = typeof documents.$inferSelect;
+export type Invoice = typeof invoices.$inferSelect;

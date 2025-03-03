@@ -1,6 +1,6 @@
 import { NavBar } from "@/components/nav-bar";
-import { useQuery } from "@tanstack/react-query";
-import { Project } from "@shared/schema";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Project, ProjectNote } from "@shared/schema";
 import { useParams } from "wouter";
 import {
   Card,
@@ -11,14 +11,99 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, FileText, Upload } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Loader2, FileText, Upload, Calendar, DollarSign } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function ProjectDetails() {
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
+  const [newNote, setNewNote] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  // Fetch project details
   const { data: project, isLoading } = useQuery<Project>({
     queryKey: ["/api/projects", id],
   });
+
+  // Fetch project notes
+  const { data: notes } = useQuery<ProjectNote[]>({
+    queryKey: ["/api/projects", id, "notes"],
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/${id}/notes`);
+      if (!response.ok) throw new Error("Failed to fetch notes");
+      return response.json();
+    },
+  });
+
+  // Add note mutation
+  const addNoteMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await apiRequest("POST", `/api/projects/${id}/notes`, { content });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", id, "notes"] });
+      setNewNote("");
+      toast({
+        title: "Success",
+        description: "Note added successfully",
+      });
+    },
+  });
+
+  // Update progress mutation
+  const updateProgressMutation = useMutation({
+    mutationFn: async (progress: number) => {
+      const res = await apiRequest("PATCH", `/api/projects/${id}`, { progress });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
+      toast({
+        title: "Success",
+        description: "Project progress updated",
+      });
+    },
+  });
+
+  // File upload mutation
+  const uploadFileMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/projects/${id}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Failed to upload file");
+      return res.json();
+    },
+    onSuccess: () => {
+      setSelectedFile(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", id, "documents"] });
+      toast({
+        title: "Success",
+        description: "File uploaded successfully",
+      });
+    },
+  });
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) setSelectedFile(file);
+  };
+
+  const handleFileUpload = () => {
+    if (selectedFile) {
+      uploadFileMutation.mutate(selectedFile);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -46,9 +131,33 @@ export default function ProjectDetails() {
           <Badge>{project.status}</Badge>
         </div>
 
+        {/* Progress Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Project Progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Progress value={project.progress || 0} className="mb-2" />
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>{project.progress || 0}% Complete</span>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  const newProgress = ((project.progress || 0) + 10) % 110;
+                  updateProgressMutation.mutate(newProgress);
+                }}
+              >
+                Update Progress
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <Card>
+            {/* Project Description */}
+            <Card className="mb-6">
               <CardHeader>
                 <CardTitle>Project Description</CardTitle>
               </CardHeader>
@@ -56,9 +165,57 @@ export default function ProjectDetails() {
                 <p className="whitespace-pre-wrap">{project.description}</p>
               </CardContent>
             </Card>
+
+            {/* Notes Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Project Notes</CardTitle>
+                <CardDescription>
+                  Add notes and updates about the project
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Textarea
+                      placeholder="Add a new note..."
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                    />
+                    <Button
+                      onClick={() => addNoteMutation.mutate(newNote)}
+                      disabled={!newNote.trim() || addNoteMutation.isPending}
+                    >
+                      {addNoteMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        "Add Note"
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {notes?.map((note) => (
+                      <Card key={note.id}>
+                        <CardContent className="pt-6">
+                          <p className="whitespace-pre-wrap">{note.content}</p>
+                          <p className="text-sm text-muted-foreground mt-2">
+                            Added on {new Date(note.createdAt).toLocaleString()}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           <div>
+            {/* File Upload Section */}
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle>Files</CardTitle>
@@ -67,28 +224,58 @@ export default function ProjectDetails() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" variant="outline">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload File
-                </Button>
-                
-                <div className="mt-4">
-                  {/* File list will go here */}
-                  <p className="text-sm text-muted-foreground">No files uploaded yet</p>
+                <div className="space-y-4">
+                  <div className="grid w-full max-w-sm items-center gap-1.5">
+                    <Input
+                      type="file"
+                      onChange={handleFileChange}
+                      className="mb-2"
+                    />
+                    <Button
+                      className="w-full"
+                      onClick={handleFileUpload}
+                      disabled={!selectedFile || uploadFileMutation.isPending}
+                    >
+                      {uploadFileMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload File
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  {/* File list will be implemented in the next iteration */}
+                  <div className="mt-4">
+                    <p className="text-sm text-muted-foreground">No files uploaded yet</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Project Details Card */}
             <Card>
               <CardHeader>
-                <CardTitle>Notes</CardTitle>
-                <CardDescription>
-                  Project notes and updates
-                </CardDescription>
+                <CardTitle>Project Details</CardTitle>
               </CardHeader>
-              <CardContent>
-                {/* Notes section will go here */}
-                <p className="text-sm text-muted-foreground">No notes added yet</p>
+              <CardContent className="space-y-2">
+                {project.dueDate && (
+                  <div className="flex items-center">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    <span>Due: {new Date(project.dueDate).toLocaleDateString()}</span>
+                  </div>
+                )}
+                {project.budget && (
+                  <div className="flex items-center">
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    <span>Budget: ${project.budget.toLocaleString()}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
