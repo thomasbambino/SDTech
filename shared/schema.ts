@@ -5,7 +5,7 @@ import { z } from "zod";
 // Keep existing enums
 export const userRoleEnum = pgEnum("user_role", ["pending", "customer", "admin"]);
 
-// Keep existing user table
+// Update users table to include freshbooksId
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   lastPasswordChange: timestamp("last_password_change"),
   createdAt: timestamp("created_at").defaultNow(),
   inquiryDetails: text("inquiry_details"),
+  freshbooksId: text("freshbooks_id").unique(), // Add freshbooksId field
 });
 
 // Update projects table to include progress tracking
