@@ -2,8 +2,8 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import { users, projects, invoices, documents } from "@shared/schema";
-import type { User, Project, Invoice, Document, InsertUser, InsertProject, InsertInvoice, InsertDocument } from "@shared/schema";
+import { users, projects, invoices, documents, projectNotes } from "@shared/schema";
+import type { User, Project, Invoice, Document, InsertUser, InsertProject, InsertInvoice, InsertDocument, ProjectNote, InsertProjectNote } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
@@ -32,6 +32,11 @@ export interface IStorage {
   getProjects(clientId: number): Promise<Project[]>;
   getProject(id: number): Promise<Project | undefined>;
   createProject(project: InsertProject): Promise<Project>;
+  updateProjectProgress(id: number, progress: number): Promise<Project>;
+
+  // Project Notes
+  getProjectNotes(projectId: number): Promise<ProjectNote[]>;
+  createProjectNote(note: InsertProjectNote): Promise<ProjectNote>;
 
   // Invoices
   getInvoices(projectId: number): Promise<Invoice[]>;
@@ -118,6 +123,31 @@ export class DatabaseStorage implements IStorage {
   async createProject(project: InsertProject): Promise<Project> {
     const [newProject] = await db.insert(projects).values(project).returning();
     return newProject;
+  }
+
+  async updateProjectProgress(id: number, progress: number): Promise<Project> {
+    const [updatedProject] = await db
+      .update(projects)
+      .set({ progress })
+      .where(eq(projects.id, id))
+      .returning();
+    return updatedProject;
+  }
+
+  async getProjectNotes(projectId: number): Promise<ProjectNote[]> {
+    return await db
+      .select()
+      .from(projectNotes)
+      .where(eq(projectNotes.projectId, projectId))
+      .orderBy(projectNotes.createdAt);
+  }
+
+  async createProjectNote(note: InsertProjectNote): Promise<ProjectNote> {
+    const [newNote] = await db
+      .insert(projectNotes)
+      .values(note)
+      .returning();
+    return newNote;
   }
 
   async getInvoices(projectId: number): Promise<Invoice[]> {
