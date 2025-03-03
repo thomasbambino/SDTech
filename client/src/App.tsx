@@ -11,6 +11,7 @@ import Projects from "@/pages/projects";
 import Invoices from "@/pages/invoices";
 import UserManagement from "@/pages/admin/user-management";
 import InquiriesPage from "@/pages/admin/inquiries";
+import AdminSettings from "@/pages/admin/settings";
 import CustomerInquiry from "@/pages/inquiry";
 import ChangePassword from "@/pages/change-password";
 import Clients from "@/pages/clients";
@@ -38,6 +39,7 @@ function Router() {
       <ProtectedRoute path="/invoices" component={Invoices} />
       <AdminRoute path="/admin/users" component={UserManagement} />
       <AdminRoute path="/admin/inquiries" component={InquiriesPage} />
+      <AdminRoute path="/admin/settings" component={AdminSettings} />
       <AdminRoute path="/clients" component={Clients} />
       <Route path="/auth/callback" component={OAuthCallback} />
       <Route component={NotFound} />
