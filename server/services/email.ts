@@ -23,7 +23,7 @@ export class EmailService {
       console.log('Using Mailgun domain:', process.env.MAILGUN_DOMAIN);
 
       await client.messages.create(process.env.MAILGUN_DOMAIN, {
-        from: `SD Tech Pros <mailgun@${process.env.MAILGUN_DOMAIN}>`,
+        from: 'SD Tech Pros <noreply@sdtechpros.com>',
         to: [to],
         subject,
         html,
