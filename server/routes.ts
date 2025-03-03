@@ -842,12 +842,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           freshbooksId: newUser.freshbooksId
         });
 
-        // Send password reset email
-        await emailService.sendPasswordResetEmail(newUser.email, tempPassword);
+        // Try to send email, but don't fail if it doesn't work
+        try {
+          await emailService.sendPasswordResetEmail(newUser.email, tempPassword);
+        } catch (emailError) {
+          console.error("Failed to send password reset email:", emailError);
+        }
 
         res.json({
-          message: "New user account created and temporary password email sent",
-          tempPassword // Only included in development
+          message: "New user account created with temporary password",
+          tempPassword // Always include in development
         });
       } else {
         // Update existing user's password
@@ -858,12 +862,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           freshbooksId: user.freshbooksId
         });
 
-        // Send password reset email
-        await emailService.sendPasswordResetEmail(user.email, tempPassword);
+        // Try to send email, but don't fail if it doesn't work
+        try {
+          await emailService.sendPasswordResetEmail(user.email, tempPassword);
+        } catch (emailError) {
+          console.error("Failed to send password reset email:", emailError);
+        }
 
         res.json({
-          message: "Password reset successful and email sent",
-          tempPassword // Only included in development
+          message: "Password reset successful",
+          tempPassword // Always include in development
         });
       }
     } catch (error) {
