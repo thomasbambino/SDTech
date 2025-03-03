@@ -794,11 +794,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (!projectsResponse.ok) {
+        // If no projects found, return empty array instead of error
+        if (projectsResponse.status === 404) {
+          return res.json([]);
+        }
         throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
       }
 
       const projectsData = await projectsResponse.json();
       console.log("Raw projects data:", projectsData);
+
+      // Handle case where no projects exist
+      if (!projectsData.response?.result?.projects) {
+        return res.json([]);
+      }
 
       // Format the projects data
       const formattedProjects = projectsData.response.result.projects.map(project => ({

@@ -10,7 +10,7 @@ import { EditClientDialog } from "@/components/edit-client-dialog";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 
 interface Project {
-  id: number;
+  id: string;
   title: string;
   description: string;
   status: string;
@@ -36,9 +36,6 @@ export default function ClientProfile() {
     queryKey: ["/api/freshbooks/clients", id],
     onSuccess: (data) => {
       console.log("Received client data:", data);
-    },
-    onError: (error) => {
-      console.error("Error loading client:", error);
     }
   });
 
@@ -47,9 +44,6 @@ export default function ClientProfile() {
     enabled: !!client,
     onSuccess: (data) => {
       console.log("Received projects data:", data);
-    },
-    onError: (error) => {
-      console.error("Error loading projects:", error);
     }
   });
 
@@ -148,7 +142,7 @@ export default function ClientProfile() {
               ) : projectsError ? (
                 <Alert variant="destructive">
                   <AlertDescription>
-                    Error loading projects: {projectsError.message}
+                    {projectsError instanceof Error ? projectsError.message : "Failed to load projects"}
                   </AlertDescription>
                 </Alert>
               ) : !projects?.length ? (
@@ -174,7 +168,9 @@ export default function ClientProfile() {
                     <CardContent>
                       <p className="text-muted-foreground mb-4">{project.description}</p>
                       <Button variant="outline" className="w-full" asChild>
-                        <Link href={`/projects/${project.id}`}>View Details</Link>
+                        <Link href={`/clients/${client.id}/projects/${project.id}`}>
+                          View Details
+                        </Link>
                       </Button>
                     </CardContent>
                   </Card>
