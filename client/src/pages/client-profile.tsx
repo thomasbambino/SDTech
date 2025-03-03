@@ -31,15 +31,20 @@ interface FreshbooksClient {
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
 
-  const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
-    queryKey: ["/api/freshbooks/clients", id],
+  // Fetch all clients
+  const { data: clients, isLoading: isLoadingClients, error: clientsError } = useQuery<FreshbooksClient[]>({
+    queryKey: ["/api/freshbooks/clients"],
   });
+
+  // Find the specific client
+  const client = clients?.find(c => c.id === id);
 
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ["/api/clients", id, "projects"],
+    enabled: !!client // Only fetch projects if we have a client
   });
 
-  if (isLoadingClient || isLoadingProjects) {
+  if (isLoadingClients || isLoadingProjects) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -47,14 +52,14 @@ export default function ClientProfile() {
     );
   }
 
-  if (clientError || !client) {
+  if (clientsError || !client) {
     return (
       <div className="min-h-screen bg-background">
         <NavBar />
         <div className="container mx-auto px-4 py-8">
           <Alert variant="destructive">
             <AlertDescription>
-              {clientError instanceof Error ? clientError.message : "Client not found. Please make sure you have access to view this client's details."}
+              {clientsError instanceof Error ? clientsError.message : "Client not found. Please make sure you have access to view this client's details."}
             </AlertDescription>
           </Alert>
           <Button variant="outline" className="mt-4" asChild>
