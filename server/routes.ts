@@ -449,20 +449,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const rawData = await clientResponse.json();
-      console.log("Client data response:", JSON.stringify(rawData, null, 2));
-
-      // Format the response to match the clients listing structure
       const clientData = rawData.response.result.client;
 
-      // Handle date formatting properly
-      let createdDate;
-      if (clientData.signup_date) {
-        createdDate = new Date(clientData.signup_date * 1000).toLocaleDateString();
-      } else if (clientData.updated) {
-        createdDate = new Date(clientData.updated * 1000).toLocaleDateString();
-      } else {
-        createdDate = 'Date not available';
-      }
+      // Convert timestamp to date string
+      const formatDate = (timestamp: number | null | undefined) => {
+        if (!timestamp) return 'Date not available';
+        // Multiply by 1000 to convert seconds to milliseconds
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleDateString();
+      };
 
       const formattedClient = {
         id: clientData.id.toString(),
@@ -479,10 +474,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clientData.p_country
         ].filter(Boolean).join(", "),
         status: clientData.vis_state === 0 ? "Active" : "Inactive",
-        createdDate: createdDate
+        createdDate: formatDate(clientData.signup_date || clientData.updated)
       };
 
-      console.log("Formatted client data:", formattedClient);
       res.json(formattedClient);
     } catch (error) {
       console.error("Error fetching client:", error);
