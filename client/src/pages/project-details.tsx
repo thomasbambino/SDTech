@@ -68,6 +68,14 @@ export default function ProjectDetails() {
         description: "Note added successfully",
       });
     },
+    onError: (error) => {
+      console.error("Error adding note:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add note. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Update progress mutation
@@ -83,6 +91,14 @@ export default function ProjectDetails() {
         description: "Project progress updated",
       });
     },
+    onError: (error) => {
+      console.error("Error updating progress:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update progress. Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   // File upload mutation
@@ -90,9 +106,11 @@ export default function ProjectDetails() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
+      // Use fetch directly for file upload as apiRequest doesn't handle FormData
       const res = await fetch(`/api/projects/${id}/documents`, {
         method: "POST",
         body: formData,
+        credentials: "include", // Important for sending cookies
       });
       if (!res.ok) throw new Error("Failed to upload file");
       return res.json();
@@ -103,6 +121,14 @@ export default function ProjectDetails() {
       toast({
         title: "Success",
         description: "File uploaded successfully",
+      });
+    },
+    onError: (error) => {
+      console.error("Error uploading file:", error);
+      toast({
+        title: "Error",
+        description: "Failed to upload file. Please try again.",
+        variant: "destructive",
       });
     },
   });
@@ -153,8 +179,8 @@ export default function ProjectDetails() {
             <Progress value={project.progress || 0} className="mb-2" />
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>{project.progress || 0}% Complete</span>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => {
                   const newProgress = ((project.progress || 0) + 10) % 110;
