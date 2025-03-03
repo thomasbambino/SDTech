@@ -11,7 +11,7 @@ export class EmailService {
   private async sendEmail(to: string, subject: string, html: string) {
     try {
       const result = await mg.messages.create(process.env.MAILGUN_DOMAIN!, {
-        from: `SD Tech Pros <noreply@${process.env.MAILGUN_DOMAIN}>`,
+        from: `SD Tech Pros Support <support@${process.env.MAILGUN_DOMAIN}>`,
         to: [to],
         subject,
         html,
