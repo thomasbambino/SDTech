@@ -52,6 +52,42 @@ function validateId(id: string): number | null {
   return isNaN(parsed) ? null : parsed;
 }
 
+const formatDate = (dateString: string | null | undefined) => {
+    try {
+      if (!dateString) return 'Date not available';
+
+      // Check if it's a string representation of a date
+      if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}/)) {
+        // Parse the ISO-like date string
+        const date = new Date(dateString);
+
+        // Check if the date is valid
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+        }
+      }
+
+      // If it's a numeric timestamp (seconds since epoch)
+      if (!isNaN(Number(dateString))) {
+        const timestamp = Number(dateString);
+        return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
+
+      return 'Invalid date';
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Date formatting error';
+    }
+  };
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   await createInitialAdminUser();
@@ -407,6 +443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("Fetching client details for ID:", req.params.id);
       const tokens = req.session.freshbooksTokens;
+
       if (!tokens) {
         return res.status(401).json({
           error: "Freshbooks not connected",
@@ -458,25 +495,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         created_at: clientData.created_at
       });
 
-      // Enhanced date formatting function with better error handling
-      const formatDate = (timestamp: number | null | undefined) => {
-        try {
-          if (!timestamp) return 'Date not available';
-          // Make sure timestamp is a number
-          const numericTimestamp = Number(timestamp);
-          if (isNaN(numericTimestamp)) return 'Invalid date';
-          // Convert seconds to milliseconds and format
-          return new Date(numericTimestamp * 1000).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          });
-        } catch (error) {
-          console.error('Error formatting date:', error);
-          return 'Date formatting error';
-        }
-      };
-
       const formattedClient = {
         id: clientData.id.toString(),
         name: `${clientData.fname} ${clientData.lname}`.trim(),
@@ -492,12 +510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clientData.p_country
         ].filter(Boolean).join(", "),
         status: clientData.vis_state === 0 ? "Active" : "Inactive",
-        // Try different date fields in order of preference
-        createdDate: formatDate(clientData.signup_date) !== 'Date not available' 
-          ? formatDate(clientData.signup_date)
-          : formatDate(clientData.created_at) !== 'Date not available'
-          ? formatDate(clientData.created_at)
-          : formatDate(clientData.updated)
+        createdDate: formatDate(clientData.signup_date) || formatDate(clientData.updated) || formatDate(clientData.created_at) || 'Date not available'
       };
 
       console.log("Formatted client data:", formattedClient);

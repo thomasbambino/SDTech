@@ -1,0 +1,85 @@
+Looking at your code, I can see why you're getting "Invalid date" for the client created date. The issue is in the `formatDate` function within your `/api/freshbooks/clients/:id` route handler.
+
+Here's the problematic part:
+
+```javascript
+// Enhanced date formatting function with better error handling
+const formatDate = (timestamp: number | null | undefined) => {
+  try {
+    if (!timestamp) return 'Date not available';
+    // Make sure timestamp is a number
+    const numericTimestamp = Number(timestamp);
+    if (isNaN(numericTimestamp)) return 'Invalid date';
+    // Convert seconds to milliseconds and format
+    return new Date(numericTimestamp * 1000).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Date formatting error';
+  }
+};
+```
+
+The issue is that Freshbooks doesn't return a Unix timestamp (seconds since epoch) as you're expecting. Instead, Freshbooks returns date strings in the format `"YYYY-MM-DD HH:MM:SS"` (like "2024-10-22 06:57:23").
+
+When you try to convert this string to a number with `Number(timestamp)`, you get `NaN`, which causes your function to return "Invalid date". Then, even if it wasn't NaN, multiplying by 1000 would be incorrect since these aren't Unix timestamps.
+
+Here's how to fix it:
+
+```javascript
+const formatDate = (dateString: string | null | undefined) => {
+  try {
+    if (!dateString) return 'Date not available';
+    
+    // Check if it's a string representation of a date
+    if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}/)) {
+      // Parse the ISO-like date string
+      const date = new Date(dateString);
+      
+      // Check if the date is valid
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
+    }
+    
+    // If it's a numeric timestamp (seconds since epoch)
+    if (!isNaN(Number(dateString))) {
+      const timestamp = Number(dateString);
+      return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+    
+    return 'Invalid date';
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Date formatting error';
+  }
+};
+```
+
+This updated function will handle both string date formats and Unix timestamps. It first checks if the input is a string that looks like a date (starts with YYYY-MM-DD), and if so, parses it directly. If that fails, it falls back to treating it as a Unix timestamp.
+
+You should also add some debug logging to see exactly what format Freshbooks is returning:
+
+```javascript
+console.log("Raw date values from API:", {
+  signup_date_type: typeof clientData.signup_date,
+  signup_date_value: clientData.signup_date,
+  updated_type: typeof clientData.updated,
+  updated_value: clientData.updated,
+  created_at_type: typeof clientData.created_at,
+  created_at_value: clientData.created_at
+});
+```
+
+This will help you understand exactly what format each field is using, which could help diagnose any other formatting issues.
