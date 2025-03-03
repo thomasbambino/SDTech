@@ -71,8 +71,9 @@ export class FreshbooksService {
       const scopes = [
         "user:profile:read",
         "user:clients:read",
-        "user:clients:write",  // Add write permission
+        "user:clients:write",
         "user:projects:read",
+        "user:projects:write",  // Added write permission for projects
         "user:invoices:read",
       ];
 

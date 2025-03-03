@@ -30,34 +30,12 @@ export function FreshbooksConnect() {
       queryClient.invalidateQueries({ queryKey: ["/api/freshbooks/auth"] });
       toast({
         title: "Disconnected",
-        description: "Successfully disconnected from Freshbooks.",
+        description: "Successfully disconnected from Freshbooks. Please reconnect to get the latest permissions.",
       });
     },
     onError: (error: Error) => {
       toast({
         title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Sync mutation
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/freshbooks/sync");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/freshbooks/clients"] });
-      toast({
-        title: "Sync Successful",
-        description: "Your Freshbooks data has been synchronized.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Sync Failed",
         description: error.message,
         variant: "destructive",
       });
@@ -74,13 +52,7 @@ export function FreshbooksConnect() {
       setIsConnected(true);
       toast({
         title: "Connected",
-        description: "Successfully connected to Freshbooks.",
-      });
-    } else if (params.get("freshbooks") === "error") {
-      toast({
-        title: "Connection Failed",
-        description: "Failed to connect to Freshbooks. Please try again.",
-        variant: "destructive",
+        description: "Successfully connected to Freshbooks with updated permissions.",
       });
     }
   }, [location, toast]);
@@ -100,7 +72,7 @@ export function FreshbooksConnect() {
     if (!authData?.authUrl) return;
 
     setIsConnecting(true);
-    window.open(authData.authUrl, "_blank", "noopener,noreferrer");
+    window.location.href = authData.authUrl;
   };
 
   return (
@@ -132,17 +104,10 @@ export function FreshbooksConnect() {
                 )}
               </Button>
               <Button 
-                onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending}
+                onClick={() => queryClient.invalidateQueries()}
+                disabled={false}
               >
-                {syncMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  'Sync Now'
-                )}
+                Refresh Data
               </Button>
             </>
           ) : (
