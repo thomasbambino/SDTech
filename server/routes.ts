@@ -128,6 +128,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Get the account ID
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${req.session.freshbooksTokens.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+      if (!accountId) {
+        throw new Error("No account ID found in user profile");
+      }
+
       // Create client in Freshbooks
       const freshbooksClientData = {
         fname: user.firstName || user.username.split('@')[0],
