@@ -25,15 +25,14 @@ interface Project {
   fixedPrice?: string;
   createdAt: string;
   clientId: string;
-  progress?: number | null;
-  freshbooksId?: string;
 }
 
 export default function Projects() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  const endpoint = "/api/projects";  // Single endpoint that handles both types of projects
+  // Use different endpoints based on user role
+  const endpoint = "/api/projects";
 
   const { data: projects, isLoading, error } = useQuery<Project[]>({
     queryKey: [endpoint],
@@ -119,10 +118,10 @@ export default function Projects() {
                         Due: {new Date(project.dueDate).toLocaleDateString()}
                       </div>
                     )}
-                    {(project.budget || project.fixedPrice) && (
+                    {project.fixedPrice && (
                       <div className="flex items-center text-sm text-muted-foreground">
                         <DollarSign className="h-4 w-4 mr-2" />
-                        Budget: ${Number(project.budget || project.fixedPrice).toLocaleString()}
+                        Budget: ${Number(project.fixedPrice).toLocaleString()}
                       </div>
                     )}
                   </div>
