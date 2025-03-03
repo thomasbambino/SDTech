@@ -130,8 +130,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create client in Freshbooks
       const freshbooksClientData = {
-        fname: user.firstName,
-        lname: user.lastName,
+        fname: user.firstName || user.username.split('@')[0],
+        lname: user.lastName || "",
         organization: user.companyName,
         email: user.email,
         home_phone: user.phoneNumber,
@@ -159,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         res.json({ message: "Inquiry approved and client created successfully" });
       } catch (freshbooksError) {
-        console.error("Freshbooks error:", freshbooksError);
+        console.error("Freshbooks error details:", freshbooksError);
         throw new Error("Failed to create Freshbooks client. Please try again later.");
       }
     } catch (error) {
