@@ -684,10 +684,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     try {
-      const data = insertProjectSchema.parse({
+      const data = {
         ...req.body,
-        clientId: req.params.clientId
-      });
+        clientId: req.params.clientId,
+        status: req.body.status || 'Active',
+        createdAt: new Date().toISOString()
+      };
 
       const project = await storage.createProject(data);
       res.status(201).json(project);
