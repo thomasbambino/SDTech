@@ -689,12 +689,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/freshbooks/clients/:id", async (req, res) => {
     try {
       console.log("Fetching client details for ID:", req.params.id);
-      const tokens = req.session.freshbooksTokens;
+      
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
 
+      // Get tokens from session
+      const tokens = req.session.freshbooksTokens;
       if (!tokens) {
+        console.log("No Freshbooks tokens found in session");
         return res.status(401).json({
           error: "Freshbooks not connected",
           details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Verify user has access to this client data
+      const authenticatedUser = req.user as Express.User;
+      if (authenticatedUser.role !== 'admin' && authenticatedUser.freshbooksId !== req.params.id) {
+        console.log("Access denied - User does not have permission to view this client");
+        return res.status(403).json({
+          error: "Access denied",
+          details: "You do not have permission to view this client's details"
         });
       }
 
@@ -770,6 +786,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching client:", error);
       res.status(500).json({
         error: "Failed to fetch client",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Add endpoint to fetch client's projects
+  app.get("/api/freshbooks/clients/:id/projects", async (req, res) => {
+    try {
+      console.log("Fetching projects for client ID:", req.params.id);
+      
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      // Get tokens from session
+      const tokens = req.session.freshbooksTokens;
+      if (!tokens) {
+        console.log("No Freshbooks tokens found in session");
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Verify user has access to this client's projects
+      const authenticatedUser = req.user as Express.User;
+      if (authenticatedUser.role !== 'admin' && authenticatedUser.freshbooksId !== req.params.id) {
+        console.log("Access denied - User does not have permission to view these projects");
+        return res.status(403).json({
+          error: "Access denied",
+          details: "You do not have permission to view these projects"
+        });
+      }
+
+      // Get account ID
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+      if (!accountId) {
+        throw new Error("No account ID found in user profile");
+      }
+
+      console.log("Fetching projects for client ID:", req.params.id);
+
+      // Fetch projects for the client
+      const projectsResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${accountId}/projects?client_id=${req.params.id}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!projectsResponse.ok) {
+        throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
+      }
+
+      const rawData = await projectsResponse.json();
+      console.log("Raw projects data:", rawData);
+
+      const formattedProjects = rawData.projects.map((project: any) => ({
+        id: project.id.toString(),
+        title: project.title,
+        description: project.description,
+        status: project.active ? "Active" : "Inactive",
+        dueDate: project.due_date,
+        budget: project.budget,
+        fixedPrice: project.fixed_price,
+        createdAt: project.created_at,
+        clientId: project.client_id.toString(),
+        billingMethod: project.billing_method,
+        projectType: project.project_type,
+        billedAmount: project.billed_amount,
+        billedStatus: project.billed_status,
+        services: project.services
+      }));
+
+      console.log("Formatted projects:", formattedProjects);
+      res.json(formattedProjects);
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({
+        error: "Failed to fetch projects",
         details: error instanceof Error ? error.message : String(error)
       });
     }

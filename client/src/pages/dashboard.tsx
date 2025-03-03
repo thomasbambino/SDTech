@@ -36,32 +36,53 @@ export default function Dashboard() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
+  console.log('Current user:', {
+    id: user?.id,
+    role: user?.role,
+    freshbooksId: user?.freshbooksId
+  });
+
   // Fetch Freshbooks client data if user is a customer
-  const { data: fbClient, isLoading: isLoadingClient } = useQuery<FreshbooksClient>({
+  const { data: fbClient, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", user?.freshbooksId],
     queryFn: async () => {
+      console.log('Fetching Freshbooks client data for ID:', user?.freshbooksId);
       const response = await fetch(`/api/freshbooks/clients/${user?.freshbooksId}`, {
         credentials: 'include'
       });
-      if (!response.ok) throw new Error("Failed to fetch client details");
-      return response.json();
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Error fetching client data:', error);
+        throw new Error(error.error || "Failed to fetch client details");
+      }
+      const data = await response.json();
+      console.log('Received client data:', data);
+      return data;
     },
     enabled: !isAdmin && !!user?.freshbooksId
   });
 
   // Fetch Freshbooks projects for the client
-  const { data: fbProjects, isLoading: isLoadingProjects } = useQuery<FreshbooksProject[]>({
+  const { data: fbProjects, isLoading: isLoadingProjects, error: projectsError } = useQuery<FreshbooksProject[]>({
     queryKey: ["/api/freshbooks/clients", user?.freshbooksId, "projects"],
     queryFn: async () => {
+      console.log('Fetching Freshbooks projects for client ID:', user?.freshbooksId);
       const response = await fetch(`/api/freshbooks/clients/${user?.freshbooksId}/projects`, {
         credentials: 'include'
       });
-      if (!response.ok) throw new Error("Failed to fetch projects");
-      return response.json();
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Error fetching projects:', error);
+        throw new Error(error.error || "Failed to fetch projects");
+      }
+      const data = await response.json();
+      console.log('Received projects data:', data);
+      return data;
     },
     enabled: !isAdmin && !!user?.freshbooksId
   });
 
+  // Show loading state
   if (isLoadingClient || isLoadingProjects) {
     return (
       <div className="min-h-screen bg-background">
@@ -71,6 +92,11 @@ export default function Dashboard() {
         </div>
       </div>
     );
+  }
+
+  // Show error state if any
+  if (clientError || projectsError) {
+    console.error('Dashboard errors:', { clientError, projectsError });
   }
 
   return (
