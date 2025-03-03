@@ -24,13 +24,14 @@ interface Project {
   fixedPrice?: string;
   createdAt: string;
   clientId: string;
+  progress?: number;
 }
 
 export default function Projects() {
   const { data: projects, isLoading, error } = useQuery<Project[]>({
-    queryKey: ["/api/freshbooks/projects"],
+    queryKey: ["/api/projects"],
     queryFn: async () => {
-      const response = await fetch("/api/freshbooks/projects");
+      const response = await fetch("/api/projects");
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Error: ${response.status}`);
@@ -44,7 +45,7 @@ export default function Projects() {
       <div className="min-h-screen bg-background">
         <NavBar />
         <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-8 w-4 animate-spin" />
         </div>
       </div>
     );
@@ -110,6 +111,14 @@ export default function Projects() {
                       <div className="flex items-center text-sm text-muted-foreground">
                         <DollarSign className="h-4 w-4 mr-2" />
                         Budget: ${Number(project.fixedPrice).toLocaleString()}
+                      </div>
+                    )}
+                    {typeof project.progress === 'number' && (
+                      <div className="w-full bg-muted rounded-full h-2.5">
+                        <div
+                          className="bg-primary h-2.5 rounded-full"
+                          style={{ width: `${project.progress}%` }}
+                        />
                       </div>
                     )}
                   </div>
