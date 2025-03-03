@@ -597,7 +597,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(users);
   });
 
-  // Add these new endpoints before the existing project routes
+  // Add this new endpoint before the other project-related routes
+  app.get("/api/freshbooks/projects", async (req, res) => {
+    try {
+      const tokens = req.session.freshbooksTokens;
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the business ID from user profile
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      console.log("User profile data:", meData);
+
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+
+      if (!businessId) {
+        throw new Error("No business ID found in user profile");
+      }
+
+      console.log("Using business ID:", businessId);
+
+      // Fetch all projects using the correct endpoint
+      const projectsResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/projects`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`
+          }
+        }
+      );
+
+      if (!projectsResponse.ok) {
+        const errorText = await projectsResponse.text();
+        console.error("Projects API error response:", errorText);
+        throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
+      }
+
+      const projectsData = await projectsResponse.json();
+      console.log("Raw projects response:", JSON.stringify(projectsData, null, 2));
+
+      // Check if we have projects in the response
+      if (!projectsData.projects) {
+        console.log("No projects found in response");
+        return res.json([]);
+      }
+
+      // Format the projects data
+      const formattedProjects = projectsData.projects.map(project => {
+        console.log("Processing project:", project);
+        return {
+          id: project.id.toString(),
+          title: project.title?.trim() || 'Untitled Project',
+          description: project.description || '',
+          status: project.complete ? 'Completed' : 'Active',
+          dueDate: project.due_date,
+          budget: project.budget,
+          fixedPrice: project.fixed_price,
+          createdAt: project.created_at,
+          clientId: project.client_id.toString(),
+          progress: project.progress || 0
+        };
+      });
+
+      console.log("Formatted projects:", formattedProjects);
+      res.json(formattedProjects);
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({
+        error: "Failed to fetch projects",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
   // Project Notes
   app.get("/api/projects/:id/notes", async (req, res) => {
@@ -785,6 +869,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+  // Add these new endpoints before the existing project routes
+
   // Add these endpoints to handle client-specific projects
   app.get("/api/clients/:clientId/projects", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
@@ -817,7 +903,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const project = await storage.createProject(data);
       res.status(201).json(project);
-    } catch (error) {
+    } catch(error) {
       console.error("Error creating project:", error);
       res.status(400).json({
         error: "Failed to create project",
