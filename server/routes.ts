@@ -406,6 +406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update the single client fetch endpoint
   app.get("/api/freshbooks/clients/:id", async (req, res) => {
     try {
+      console.log("Fetching client details for ID:", req.params.id);
       const tokens = req.session.freshbooksTokens;
       if (!tokens) {
         return res.status(401).json({
@@ -427,11 +428,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const meData = await meResponse.json();
+      console.log("User profile response:", JSON.stringify(meData, null, 2));
       const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
 
       if (!accountId) {
         throw new Error("No account ID found in user profile");
       }
+
+      console.log("Found account ID:", accountId);
+      console.log("Fetching client for account:", accountId);
 
       // Fetch single client with the account ID
       const clientResponse = await fetch(
@@ -449,7 +454,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const rawData = await clientResponse.json();
-      res.json(rawData);
+      console.log("Client data response:", JSON.stringify(rawData, null, 2));
+      res.json(rawData.response.result.client);
     } catch (error) {
       console.error("Error fetching client:", error);
       res.status(500).json({

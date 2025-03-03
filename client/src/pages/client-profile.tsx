@@ -19,7 +19,6 @@ interface Project {
 
 interface FreshbooksClient {
   id: string;
-  name: string;
   organization: string;
   email: string;
   phone: string;
@@ -27,12 +26,14 @@ interface FreshbooksClient {
   status: string;
   createdDate: string;
   updatedDate: string;
+  fname?: string;
+  lname?: string;
 }
 
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
 
-  const { data: client, isLoading: isLoadingClient } = useQuery<FreshbooksClient>({
+  const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", id],
     onSuccess: (data) => {
       console.log("Received client data:", data); // Debug log
@@ -60,18 +61,23 @@ export default function ClientProfile() {
     );
   }
 
-  if (!client) {
+  if (clientError || !client) {
     return (
       <div className="min-h-screen bg-background">
         <NavBar />
         <div className="container mx-auto px-4 py-8">
           <Alert variant="destructive">
-            <AlertDescription>Client not found</AlertDescription>
+            <AlertDescription>
+              {clientError instanceof Error ? clientError.message : "Failed to load client details"}
+            </AlertDescription>
           </Alert>
         </div>
       </div>
     );
   }
+
+  // Construct the full name from fname and lname
+  const clientName = [client.fname, client.lname].filter(Boolean).join(" ");
 
   return (
     <div className="min-h-screen bg-background">
@@ -84,7 +90,7 @@ export default function ClientProfile() {
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-2xl font-semibold">{client.name}</h2>
+                    <h2 className="text-2xl font-semibold">{clientName}</h2>
                     {client.organization && (
                       <p className="text-sm text-muted-foreground">{client.organization}</p>
                     )}
