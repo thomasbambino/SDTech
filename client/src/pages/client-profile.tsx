@@ -31,27 +31,19 @@ interface FreshbooksClient {
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
 
-  const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
-    queryKey: ["/api/freshbooks/clients", id],
-    onSuccess: (data) => {
-      console.log("Received client data:", data); // Debug log
-    },
-    onError: (error) => {
-      console.error("Error fetching client:", error); // Debug log
-    }
+  // Fetch all clients first
+  const { data: clients, isLoading: isLoadingClients, error: clientError } = useQuery<FreshbooksClient[]>({
+    queryKey: ["/api/freshbooks/clients"],
   });
+
+  // Find the specific client from the fetched clients
+  const client = clients?.find(c => c.id === id);
 
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
     queryKey: ["/api/clients", id, "projects"],
-    onSuccess: (data) => {
-      console.log("Received projects data:", data); // Debug log
-    },
-    onError: (error) => {
-      console.error("Error fetching projects:", error); // Debug log
-    }
   });
 
-  if (isLoadingClient || isLoadingProjects) {
+  if (isLoadingClients || isLoadingProjects) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
