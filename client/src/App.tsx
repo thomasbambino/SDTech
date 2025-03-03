@@ -16,6 +16,7 @@ import ChangePassword from "@/pages/change-password";
 import Clients from "@/pages/clients";
 import Projects from "@/pages/projects";
 import ClientProfile from "@/pages/client-profile";
+import ProjectDetails from "@/pages/project-details";
 import { ProtectedRoute } from "./lib/protected-route";
 import OAuthCallback from "@/pages/oauth-callback";
 
@@ -37,6 +38,7 @@ function Router() {
       <ProtectedRoute path="/change-password" component={ChangePassword} />
       <ProtectedRoute path="/dashboard" component={Dashboard} />
       <ProtectedRoute path="/clients/:id" component={ClientProfile} />
+      <ProtectedRoute path="/projects/:id" component={ProjectDetails} />
       <ProtectedRoute path="/invoices" component={Invoices} />
       <AdminRoute path="/admin/users" component={UserManagement} />
       <AdminRoute path="/admin/inquiries" component={InquiriesPage} />
