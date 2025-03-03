@@ -20,12 +20,13 @@ export default function UserManagement() {
   const { user } = useAuth();
 
   // Redirect non-admin users
-  if (user?.role !== "admin") {
-    return <div>Access denied. Admin only.</div>;
+  if (!user?.role === 'admin') {
+    window.location.href = '/'; // Redirect to home page
+    return null;
   }
 
   const { data: users, isLoading } = useQuery<User[]>({
-    queryKey: ["/api/users/admins"], // Updated endpoint to only fetch admin users
+    queryKey: ["/api/users/admins"],
   });
 
   const roleUpdateMutation = useMutation({
@@ -79,7 +80,7 @@ export default function UserManagement() {
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Admin Management</h1>
         <div className="grid gap-4">
-          {users?.filter(u => u.role === 'admin').map((adminUser) => (
+          {users?.map((adminUser) => (
             <Card key={adminUser.id}>
               <CardContent className="flex items-center justify-between p-6">
                 <div>

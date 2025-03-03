@@ -924,18 +924,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If admin, return all projects
       if (authenticatedUser.role === 'admin') {
-        const projects = await storage.getAllProjects();
+        const projects = await storage.getProjects();
         return res.json(projects);
       }
 
-      // For customers, only return their own projects
+      // For customers, only return their projects
       if (authenticatedUser.role === 'customer') {
         const projects = await storage.getProjects(authenticatedUser.id);
+        if (!projects) {
+          return res.json([]);
+        }
         return res.json(projects);
       }
 
       // For pending users or other roles
-      return res.status(403).json({ error: "Access denied. Insufficient permissions." });
+      return res.status(403).json({ 
+        error: "Access denied. Insufficient permissions.",
+        details: "Your account does not have the required permissions to view projects."
+      });
     } catch (error) {
       console.error("Error fetching projects:", error);
       res.status(500).json({
