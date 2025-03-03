@@ -4,6 +4,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema, insertInquirySchema } from "@shared/schema";
 import { freshbooksService } from "./services/freshbooks";
+import { emailService } from "./services/email";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
 import { APIClient } from '@freshbooks/api';
@@ -306,16 +307,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tempPassword = generateTemporaryPassword();
       const hashedPassword = await storage.hashPassword(tempPassword);
 
-      await storage.updateUserPassword(parseInt(req.params.id), hashedPassword, true);
+      const user = await storage.getUser(parseInt(req.params.id));
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
 
-      // TODO: Send email with temporary password
-      // For now, return it in response (only in development)
+      await storage.updateUserPassword(user.id, hashedPassword, true);
+
+      // Send password reset email
+      await emailService.sendPasswordResetEmail(user.email, tempPassword);
+
       res.json({
-        message: "Password reset successful",
-        tempPassword
+        message: "Password reset successful and email sent",
+        tempPassword // Only included in development
       });
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ 
+        error: "Failed to reset password",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -832,8 +842,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           freshbooksId: newUser.freshbooksId
         });
 
+        // Send password reset email
+        await emailService.sendPasswordResetEmail(newUser.email, tempPassword);
+
         res.json({
-          message: "New user account created with temporary password",
+          message: "New user account created and temporary password email sent",
           tempPassword // Only included in development
         });
       } else {
@@ -845,15 +858,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           freshbooksId: user.freshbooksId
         });
 
+        // Send password reset email
+        await emailService.sendPasswordResetEmail(user.email, tempPassword);
+
         res.json({
-          message: "Password reset successful",
+          message: "Password reset successful and email sent",
           tempPassword // Only included in development
         });
       }
     } catch (error) {
       console.error("Error resetting client password:", error);
       res.status(500).json({
-        error: "Failed to reset password",
+        error: "Failed to reset password", 
         details: error instanceof Error ? error.message : String(error)
       });
     }
