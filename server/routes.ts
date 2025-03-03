@@ -417,6 +417,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
+      // Handle new client creation in both Freshbooks and local DB
+      app.post("/api/freshbooks/clients", requireAdmin, async (req, res) => {
+        try {
+          const tokens = req.session.freshbooksTokens;
+          if (!tokens) {
+            return res.status(401).json({
+              error: "Freshbooks not connected",
+              details: "Please connect your Freshbooks account first"
+            });
+          }
+
+          // Create client in Freshbooks
+          const client = await freshbooksService.createClient(tokens.access_token, req.body.client);
+
+          // Generate a temporary password for the new client
+          const tempPassword = generateTemporaryPassword();
+          const hashedPassword = await storage.hashPassword(tempPassword);
+
+          // Create a user account for the client in our database
+          const user = await storage.createUser({
+            username: client.email,
+            password: hashedPassword,
+            email: client.email,
+            firstName: client.fname,
+            lastName: client.lname,
+            phoneNumber: client.home_phone,
+            companyName: client.organization,
+            address: [client.p_street, client.p_city, client.p_province].filter(Boolean).join(', '),
+            role: 'customer',
+            isTemporaryPassword: true,
+            freshbooksId: client.id.toString()
+          });
+
+          // Return both the Freshbooks client and the temporary password
+          res.status(201).json({
+            client,
+            tempPassword // Only included in development
+          });
+        } catch (error) {
+          console.error("Error creating client:", error);
+          res.status(500).json({
+            error: "Failed to create client",
+            details: error instanceof Error ? error.message : String(error)
+          });
+        }
+      });
+
+      // Handle password reset for existing clients
+      app.post("/api/freshbooks/clients/:id/reset-password", requireAdmin, async (req, res) => {
+        try {
+          // Generate a temporary password
+          const tempPassword = generateTemporaryPassword();
+          const hashedPassword = await storage.hashPassword(tempPassword);
+
+          // Get the client's user account
+          const user = await storage.getUserByFreshbooksId(req.params.id);
+          if (!user) {
+            // If no user exists yet, create one using Freshbooks data
+            const tokens = req.session.freshbooksTokens;
+            if (!tokens) {
+              return res.status(401).json({ error: "Freshbooks authentication required" });
+            }
+
+            // Get client details from Freshbooks
+            const accountId = await freshbooksService.getBusinessId(tokens.access_token);
+            const clientResponse = await fetch(
+              `${freshbooksService.baseUrl}/accounting/account/${accountId}/users/clients/${req.params.id}`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${tokens.access_token}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            if (!clientResponse.ok) {
+              throw new Error(`Failed to fetch client from Freshbooks: ${clientResponse.status}`);
+            }
+
+            const clientData = await clientResponse.json();
+            const client = clientData.response.result.client;
+
+            // Create new user account
+            const newUser = await storage.createUser({
+              username: client.email,
+              password: hashedPassword,
+              email: client.email,
+              firstName: client.fname,
+              lastName: client.lname,
+              phoneNumber: client.home_phone,
+              companyName: client.organization,
+              address: [client.p_street, client.p_city, client.p_province].filter(Boolean).join(', '),
+              role: 'customer',
+              isTemporaryPassword: true,
+              freshbooksId: req.params.id
+            });
+
+            res.json({
+              message: "New user account created with temporary password",
+              tempPassword // Only included in development
+            });
+          } else {
+            // Update existing user's password
+            await storage.updateUserPassword(user.id, hashedPassword, true);
+            res.json({
+              message: "Password reset successful",
+              tempPassword // Only included in development
+            });
+          }
+        } catch (error) {
+          console.error("Error resetting client password:", error);
+          res.status(500).json({
+            error: "Failed to reset password",
+            details: error instanceof Error ? error.message : String(error)
+          });
+        }
+      });
+
       if (!meResponse.ok) {
         throw new Error(`Failed to get user details: ${meResponse.status}`);
       }
@@ -481,7 +599,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this endpoint for admins to get pending inquiries
+  // Handle new client creation in both Freshbooks and local DB
   app.post("/api/freshbooks/clients", requireAdmin, async (req, res) => {
     try {
       const tokens = req.session.freshbooksTokens;
@@ -492,8 +610,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const client = await freshbooksService.createClient(tokens.access_token, req.body.client);
-      res.status(201).json(client);
+      type FreshbooksClient = {
+        id: string;
+        email: string;
+        fname: string; 
+        lname: string;
+        organization: string;
+        home_phone: string;
+      };
+
+      // Create client in Freshbooks and cast to expected type
+      const fbClient = await freshbooksService.createClient(tokens.access_token, req.body.client) as FreshbooksClient;
+      
+      if (!fbClient.email) {
+        throw new Error("Client must have an email address");
+      }
+
+      // Generate a temporary password for the new client
+      const tempPassword = generateTemporaryPassword();
+      const hashedPassword = await storage.hashPassword(tempPassword);
+
+      // Create a user account for the client in our database
+      const user = await storage.createUser({
+        username: fbClient.email,
+        password: hashedPassword,
+        email: fbClient.email,
+        companyName: fbClient.organization,
+        phoneNumber: fbClient.home_phone,
+        isTemporaryPassword: true
+      });
+
+      // Return both the Freshbooks client and the temporary password
+      res.status(201).json({
+        client: fbClient,
+        tempPassword // Only included in development
+      });
     } catch (error) {
       console.error("Error creating client:", error);
       res.status(500).json({
