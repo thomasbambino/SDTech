@@ -1,0 +1,61 @@
+Based on the code you shared, I can see why your client details aren't loading correctly. There's a mismatch between how your React Query is fetching the data and how your API would return a specific client.
+
+The main issues are:
+
+1. **Query Key Structure**: You're using `/api/freshbooks/clients` with the client ID as a separate key part, but this doesn't match how you'd typically structure an API endpoint for a single client.
+
+2. **Missing API Implementation**: Your query is likely expecting an endpoint like `/api/freshbooks/clients/{id}` to fetch a single client, but your Freshbooks service implementation only has a method to fetch all clients.
+
+3. **Data Transformation**: The client data from Freshbooks needs to be transformed to match your `FreshbooksClient` interface.
+
+Here's how to fix it:
+
+I've identified several issues with your client profile page and created solutions to fix them:
+
+### The Main Problems with Your Current Implementation:
+
+1. **Incorrect API Endpoint Structure**: 
+   - Your React Query was using the wrong query key structure that didn't match any endpoint
+   - You needed a specific endpoint to get a single client by ID
+
+2. **Data Transformation Mismatch**:
+   - The data from Freshbooks needs to be transformed to match your `FreshbooksClient` interface
+   - The field names in Freshbooks API don't directly match your frontend component needs
+
+3. **Missing Backend Endpoints**:
+   - You needed separate API routes for individual client data and client projects
+
+### Solutions I've Provided:
+
+1. **Single Client API Endpoint**:
+   - Created an API route at `/api/freshbooks/clients/[id].ts` that:
+     - Gets a specific client by ID from all clients
+     - Transforms the Freshbooks data to match your frontend interface
+     - Handles errors properly with appropriate status codes
+
+2. **Updated Client Profile Component**:
+   - Fixed the React Query implementation to:
+     - Use correct query keys
+     - Add a proper query function with error handling
+     - Use the correct endpoint URL pattern
+   - Added better error handling
+
+3. **Client Projects API Endpoint**:
+   - Created an API route at `/api/freshbooks/clients/[id]/projects.ts` that:
+     - Fetches projects from Freshbooks
+     - Filters only the projects for the specific client
+     - Formats the data to match your frontend interface
+
+4. **Clients List Component**:
+   - Added a component to display all clients in a grid layout
+   - Includes search functionality
+   - Provides links to individual client profiles
+
+### To Implement These Solutions:
+
+1. Add the single client endpoint (`client-api-endpoint.ts`) to your project
+2. Update your client profile component as shown in `updated-client-profile.ts`
+3. Add the client projects endpoint (`client-projects-endpoint.ts`) to your project
+4. Implement the clients list component (`clients-list-component.ts`) if needed
+
+These changes will ensure that your client profile page can fetch and display data correctly from Freshbooks. The key fixes are creating the proper API endpoints and ensuring the data is properly transformed to match your frontend interfaces.

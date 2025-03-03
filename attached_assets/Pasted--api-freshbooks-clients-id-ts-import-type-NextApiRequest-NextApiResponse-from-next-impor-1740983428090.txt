@@ -1,0 +1,65 @@
+// api/freshbooks/clients/[id].ts
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { freshbooksService } from '../../../services/freshbooks.service';
+import { getTokensFromCookies } from '../../../utils/auth-helpers';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Get the client ID from the URL path parameter
+  const { id } = req.query;
+
+  if (!id || typeof id !== 'string') {
+    return res.status(400).json({ error: 'Client ID is required' });
+  }
+
+  try {
+    // Get the access token from cookies/storage
+    const accessToken = req.cookies.freshbooks_access_token;
+    
+    if (!accessToken) {
+      return res.status(401).json({ error: 'Not authenticated with Freshbooks' });
+    }
+
+    // Fetch all clients first (Freshbooks API doesn't have a direct endpoint for a single client)
+    const allClients = await freshbooksService.getClients(accessToken);
+    
+    // Find the specific client by ID
+    const client = allClients.find(client => client.id.toString() === id);
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Format the client data to match your frontend interface
+    const formattedClient = {
+      id: client.id.toString(),
+      name: `${client.fname || ''} ${client.lname || ''}`.trim() || 
+           (client.organization || 'Unnamed Client'),
+      organization: client.organization || '',
+      email: client.email || '',
+      phone: client.home_phone || client.bus_phone || client.mob_phone || '',
+      address: [
+        client.p_street,
+        client.p_street2,
+        client.p_city,
+        client.p_province,
+        client.p_code,
+        client.p_country
+      ].filter(Boolean).join(', '),
+      status: client.vis_state === 0 ? 'Active' : 'Inactive',
+      createdDate: client.signup_date ? 
+        new Date(client.signup_date).toLocaleDateString() : 'Unknown'
+    };
+    
+    return res.status(200).json(formattedClient);
+  } catch (error) {
+    console.error('Error fetching client details:', error);
+    return res.status(500).json({ 
+      error: 'Failed to fetch client details',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}

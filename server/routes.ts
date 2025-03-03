@@ -751,6 +751,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/freshbooks/clients/:id/projects", async (req, res) => {
+    try {
+      console.log("Fetching projects for client ID:", req.params.id);
+      const tokens = req.session.freshbooksTokens;
+
+      if (!tokens) {
+        return res.status(401).json({
+          error: "Freshbooks not connected",
+          details: "Please connect your Freshbooks account first"
+        });
+      }
+
+      // Get the account ID
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${tokens.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get user details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+      if (!accountId) {
+        throw new Error("No account ID found in user profile");
+      }
+
+      // Fetch projects for the client
+      const projectsResponse = await fetch(
+        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects?client_id=${req.params.id}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!projectsResponse.ok) {
+        throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
+      }
+
+      const projectsData = await projectsResponse.json();
+      console.log("Raw projects data:", projectsData);
+
+      // Format the projects data
+      const formattedProjects = projectsData.response.result.projects.map(project => ({
+        id: project.id.toString(),
+        title: project.title || 'Untitled Project',
+        description: project.description || '',
+        status: project.complete ? 'Completed' : 'Active',
+        createdAt: new Date(project.created_at * 1000).toISOString()
+      }));
+
+      console.log("Formatted projects:", formattedProjects);
+      res.json(formattedProjects);
+    } catch (error) {
+      console.error("Error fetching client projects:", error);
+      res.status(500).json({
+        error: "Failed to fetch client projects",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
