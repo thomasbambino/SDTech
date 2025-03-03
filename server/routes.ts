@@ -403,7 +403,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update the single client fetch endpoint
   app.get("/api/freshbooks/clients/:id", async (req, res) => {
     try {
       console.log("Fetching client details for ID:", req.params.id);
@@ -459,7 +458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Format the response to match the clients listing structure
       const clientData = rawData.response.result.client;
       const formattedClient = {
-        id: clientData.id,
+        id: clientData.id.toString(),  // Ensure ID is a string
         name: `${clientData.fname} ${clientData.lname}`.trim(),
         organization: clientData.organization,
         email: clientData.email,
@@ -476,6 +475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdDate: new Date(clientData.updated * 1000).toLocaleDateString()
       };
 
+      console.log("Formatted client data:", formattedClient);
       res.json(formattedClient);
     } catch (error) {
       console.error("Error fetching client:", error);

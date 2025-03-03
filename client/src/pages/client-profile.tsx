@@ -30,10 +30,16 @@ interface FreshbooksClient {
 
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
+  console.log("Loading client profile for ID:", id);
 
-  // Single client query instead of fetching all clients
   const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", id],
+    onSuccess: (data) => {
+      console.log("Received client data:", data);
+    },
+    onError: (error) => {
+      console.error("Error loading client:", error);
+    }
   });
 
   const { data: projects, isLoading: isLoadingProjects } = useQuery<Project[]>({
@@ -41,10 +47,13 @@ export default function ClientProfile() {
     enabled: !!client
   });
 
-  if (isLoadingClient || isLoadingProjects) {
+  if (isLoadingClient) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="min-h-screen bg-background">
+        <NavBar />
+        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
       </div>
     );
   }
@@ -56,7 +65,7 @@ export default function ClientProfile() {
         <div className="container mx-auto px-4 py-8">
           <Alert variant="destructive">
             <AlertDescription>
-              {clientError instanceof Error ? clientError.message : `Client not found for ID: ${id}`}
+              {clientError instanceof Error ? clientError.message : `Unable to load client details`}
             </AlertDescription>
           </Alert>
           <Button variant="outline" className="mt-4" asChild>
@@ -126,7 +135,11 @@ export default function ClientProfile() {
             </div>
 
             <div className="space-y-4">
-              {!projects?.length ? (
+              {isLoadingProjects ? (
+                <div className="flex items-center justify-center h-32">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              ) : !projects?.length ? (
                 <Alert>
                   <AlertDescription>
                     No projects found. Create a new project using the button above.
