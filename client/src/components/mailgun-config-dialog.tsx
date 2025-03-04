@@ -8,34 +8,50 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+
+const mailgunConfigSchema = z.object({
+  apiKey: z.string().min(1, "API Key is required"),
+  domain: z.string().min(1, "Domain is required")
+});
+
+type MailgunConfig = z.infer<typeof mailgunConfigSchema>;
 
 export function MailgunConfigDialog({ configured }: { configured: boolean }) {
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleUpdateConfig = async () => {
+  const form = useForm<MailgunConfig>({
+    resolver: zodResolver(mailgunConfigSchema),
+    defaultValues: {
+      apiKey: "",
+      domain: ""
+    }
+  });
+
+  const handleUpdateConfig = async (values: MailgunConfig) => {
     try {
-      // First, trigger the ask_secrets tool to get Mailgun credentials
-      const response = await fetch("/api/mailgun/ask-secrets", {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to get Mailgun secrets"); // More specific error message
-      }
-
-      // If secrets were successfully set, update the configuration
       const result = await fetch("/api/mailgun/update-config", {
-        method: "POST"
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(values)
       });
 
       if (!result.ok) {
-        throw new Error("Failed to update Mailgun configuration");
+        throw new Error("Failed to update configuration");
       }
 
       setIsOpen(false);
+      form.reset();
       queryClient.invalidateQueries({ queryKey: ["/api/mailgun/status"] });
 
       toast({
@@ -62,26 +78,49 @@ export function MailgunConfigDialog({ configured }: { configured: boolean }) {
         <DialogHeader>
           <DialogTitle>Configure Mailgun Integration</DialogTitle>
           <DialogDescription>
-            Update your Mailgun API credentials. These will be securely stored and used for sending emails.
+            Update your Mailgun API credentials. These will be used for sending emails.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <p className="text-sm">
-              You'll be prompted to securely enter your Mailgun credentials:
-            </p>
-            <ul className="list-disc list-inside text-sm text-muted-foreground">
-              <li>Mailgun API Key</li>
-              <li>Mailgun Domain</li>
-            </ul>
-          </div>
-          <Button 
-            className="w-full"
-            onClick={handleUpdateConfig}
-          >
-            Update Configuration
-          </Button>
-        </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleUpdateConfig)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="apiKey"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>API Key</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Enter your Mailgun API key" 
+                      type="password"
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="domain"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Domain</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="Enter your Mailgun domain"
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit" className="w-full">
+              Update Configuration
+            </Button>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

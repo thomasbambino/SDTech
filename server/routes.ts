@@ -778,53 +778,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add endpoint to update Mailgun configuration
   app.post("/api/mailgun/update-config", requireAdmin, async (req, res) => {
     try {
+      const { apiKey, domain } = req.body;
+      
+      if (!apiKey || !domain) {
+        return res.status(400).json({ 
+          error: "Both API key and domain are required" 
+        });
+      }
+
+      // Update environment variables
+      process.env.MAILGUN_API_KEY = apiKey;
+      process.env.MAILGUN_DOMAIN = domain;
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error updating Mailgun configuration:", error);
       res.status(500).json({
         error: "Failed to update Mailgun configuration", 
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-
-  // Add endpoint to handle Mailgun secrets configuration
-  app.post("/api/mailgun/ask-secrets", requireAdmin, async (req, res) => {
-    try {
-      // Call the ask_secrets tool through code_agent_execute
-      const { success, error } = await (async () => {
-        try {
-          const response = await ask_secrets({
-            secret_keys: ["MAILGUN_API_KEY", "MAILGUN_DOMAIN"],
-            user_message: `
-Please provide your Mailgun credentials:
-
-1. Mailgun API Key (usually starts with 'key-')
-   - Find this in your Mailgun Dashboard under API Keys
-   - Use the Private API Key
-
-2. Mailgun Domain
-   - This is the domain you've configured in Mailgun
-   - Example: mg.yourdomain.com
-
-These credentials will be used for sending emails like password resets and notifications.
-`
-          });
-          return { success: true };
-        } catch (error) {
-          return { error: error instanceof Error ? error.message : String(error) };
-        }
-      })();
-
-      if (error) {
-        throw new Error(error);
-      }
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error configuring Mailgun secrets:", error);
-      res.status(500).json({
-        error: "Failed to configure Mailgun secrets",
         details: error instanceof Error ? error.message : String(error)
       });
     }
