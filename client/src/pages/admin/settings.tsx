@@ -59,31 +59,17 @@ export default function AdminSettings() {
   // Update form when branding settings are loaded
   useEffect(() => {
     if (brandingSettings) {
+      console.log('Updating form with branding settings:', brandingSettings);
       form.reset({
         siteTitle: brandingSettings.siteTitle,
         tabText: brandingSettings.tabText,
       });
-
-      // Update page title and favicon
-      document.title = brandingSettings.tabText;
-
-      const existingFavicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-      if (brandingSettings.faviconPath) {
-        if (existingFavicon) {
-          existingFavicon.href = brandingSettings.faviconPath;
-        } else {
-          const favicon = document.createElement('link');
-          favicon.rel = 'icon';
-          favicon.href = brandingSettings.faviconPath;
-          document.head.appendChild(favicon);
-        }
-      }
     }
   }, [brandingSettings, form]);
 
   const brandingMutation = useMutation({
     mutationFn: async (data: BrandingFormData) => {
-      console.log('Submitting branding form with data:', data);
+      console.log('Starting branding mutation with data:', data);
       const formData = new FormData();
 
       // Add text fields with proper validation
@@ -101,11 +87,10 @@ export default function AdminSettings() {
         formData.append('favicon', data.favicon);
       }
 
-      // Custom implementation of apiRequest to handle FormData properly
+      // Custom implementation to handle FormData properly
       const res = await fetch("/api/admin/branding", {
         method: "POST",
         body: formData,
-        // Don't set Content-Type header - browser will set it with correct boundary
         credentials: 'include' // Include cookies for authentication
       });
 
@@ -220,10 +205,17 @@ export default function AdminSettings() {
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit((data) => {
-                  console.log('Form submitted with data:', data);
-                  brandingMutation.mutate(data);
-                })} className="space-y-4">
+                <form 
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    console.log('Form submitted, current form values:', form.getValues());
+                    form.handleSubmit((data) => {
+                      console.log('Form data after validation:', data);
+                      brandingMutation.mutate(data);
+                    })(e);
+                  }}
+                >
                   <FormField
                     control={form.control}
                     name="siteTitle"
@@ -299,7 +291,10 @@ export default function AdminSettings() {
                               accept="image/x-icon,image/png"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
-                                if (file) onChange(file);
+                                if (file) {
+                                  console.log("Selected favicon file:", file.name);
+                                  onChange(file);
+                                }
                               }}
                               {...field}
                             />
