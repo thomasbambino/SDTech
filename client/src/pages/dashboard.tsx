@@ -45,40 +45,16 @@ export default function Dashboard() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  // Update the client query to handle connection status
+  // Fetch client details if user is a customer
   const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", user?.freshbooksId],
-    queryFn: async () => {
-      // First check Freshbooks connection status
-      const statusResponse = await fetch('/api/freshbooks/connection-status');
-      const statusData = await statusResponse.json();
-
-      if (!statusData.isConnected) {
-        throw new Error("Freshbooks is not connected. Please contact an administrator.");
-      }
-
-      const response = await fetch(`/api/freshbooks/clients/${user?.freshbooksId}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Error: ${response.status}`);
-      }
-      return response.json();
-    },
     enabled: !!user?.freshbooksId && user?.role === 'customer'
   });
 
-  // Update the projects query to use the main projects endpoint
+  // Fetch projects for the user
   const { data: projects, isLoading: isLoadingProjects, error: projectsError } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
-    queryFn: async () => {
-      const response = await fetch(`/api/projects`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Error: ${response.status}`);
-      }
-      return response.json();
-    },
-    enabled: !!user // Only fetch if user is logged in
+    enabled: !!user
   });
 
   if (isLoadingClient) {
@@ -118,26 +94,28 @@ export default function Dashboard() {
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h2 className="text-2xl font-semibold">{client?.name}</h2>
+                    <h2 className="text-2xl font-semibold">{client?.name || user?.companyName}</h2>
                     {client?.organization && (
                       <p className="text-sm text-muted-foreground">{client.organization}</p>
                     )}
                   </div>
-                  <Badge variant={client?.status === 'Active' ? 'default' : 'secondary'}>
-                    {client?.status}
-                  </Badge>
+                  {client && (
+                    <Badge variant={client?.status === 'Active' ? 'default' : 'secondary'}>
+                      {client?.status}
+                    </Badge>
+                  )}
                 </div>
                 <div className="space-y-3">
-                  {client?.email && (
+                  {(client?.email || user?.email) && (
                     <div className="flex items-center gap-2">
                       <Mail className="h-4 w-4" />
-                      <span>{client.email}</span>
+                      <span>{client?.email || user?.email}</span>
                     </div>
                   )}
-                  {client?.phone && (
+                  {(client?.phone || user?.phoneNumber) && (
                     <div className="flex items-center gap-2">
                       <Phone className="h-4 w-4" />
-                      <span>{client.phone}</span>
+                      <span>{client?.phone || user?.phoneNumber}</span>
                     </div>
                   )}
                   {client?.address && (
