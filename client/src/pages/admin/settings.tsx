@@ -83,56 +83,98 @@ export default function AdminSettings() {
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Admin Settings</h1>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Freshbooks Integration</CardTitle>
-            <CardDescription>
-              Connect your Freshbooks account to enable client management and invoicing features.
-              This connection will be used across all features of the application.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span>Status:</span>
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : freshbooksStatus?.connected ? (
-                  <div className="flex items-center gap-2 text-green-500">
-                    <Check className="h-4 w-4" />
-                    <span>Connected</span>
-                  </div>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Freshbooks Integration</CardTitle>
+              <CardDescription>
+                Connect your Freshbooks account to enable client management and invoicing features.
+                This connection will be used across all features of the application.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span>Status:</span>
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : freshbooksStatus?.connected ? (
+                    <div className="flex items-center gap-2 text-green-500">
+                      <Check className="h-4 w-4" />
+                      <span>Connected</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-red-500">
+                      <X className="h-4 w-4" />
+                      <span>Not Connected</span>
+                    </div>
+                  )}
+                </div>
+
+                {freshbooksStatus?.connected ? (
+                  <Button
+                    variant="destructive"
+                    onClick={() => disconnectMutation.mutate()}
+                    disabled={disconnectMutation.isPending}
+                  >
+                    {disconnectMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Disconnecting...
+                      </>
+                    ) : (
+                      'Disconnect'
+                    )}
+                  </Button>
                 ) : (
-                  <div className="flex items-center gap-2 text-red-500">
-                    <X className="h-4 w-4" />
-                    <span>Not Connected</span>
-                  </div>
+                  <Button onClick={connectToFreshbooks}>
+                    Connect to Freshbooks
+                  </Button>
                 )}
               </div>
+            </CardContent>
+          </Card>
 
-              {freshbooksStatus?.connected ? (
-                <Button
-                  variant="destructive"
-                  onClick={() => disconnectMutation.mutate()}
-                  disabled={disconnectMutation.isPending}
-                >
-                  {disconnectMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Disconnecting...
-                    </>
+          <Card>
+            <CardHeader>
+              <CardTitle>Mailgun Integration</CardTitle>
+              <CardDescription>
+                Configure Mailgun settings for sending automated emails, notifications, and client communications.
+                This integration is essential for password resets and system notifications.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span>Status:</span>
+                  {process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN ? (
+                    <div className="flex items-center gap-2 text-green-500">
+                      <Check className="h-4 w-4" />
+                      <span>Configured</span>
+                    </div>
                   ) : (
-                    'Disconnect'
+                    <div className="flex items-center gap-2 text-red-500">
+                      <X className="h-4 w-4" />
+                      <span>Not Configured</span>
+                    </div>
                   )}
+                </div>
+                <Button
+                  variant={process.env.MAILGUN_API_KEY ? "destructive" : "default"}
+                  onClick={() => {
+                    // TODO: Implement Mailgun configuration modal
+                    toast({
+                      title: "Coming Soon",
+                      description: "Mailgun configuration will be available in a future update.",
+                    });
+                  }}
+                >
+                  {process.env.MAILGUN_API_KEY ? 'Update Configuration' : 'Configure Mailgun'}
                 </Button>
-              ) : (
-                <Button onClick={connectToFreshbooks}>
-                  Connect to Freshbooks
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
