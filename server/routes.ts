@@ -853,7 +853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
 
-      // Optional file handling
+      // Optional file handling 
       const siteLogo = files.siteLogo as UploadedFile | undefined;
       const favicon = files.favicon as UploadedFile | undefined;
 
@@ -910,6 +910,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       console.log('Saving branding settings:', settings);
+
+      // Create public directory if it doesn't exist
+      if (!fs.existsSync('./public')) {
+        fs.mkdirSync('./public', { recursive: true });
+      }
+
       await fs.promises.writeFile(settingsPath, JSON.stringify(settings, null, 2));
 
       res.json({

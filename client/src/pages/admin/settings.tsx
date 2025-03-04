@@ -75,10 +75,18 @@ export default function AdminSettings() {
   const brandingMutation = useMutation({
     mutationFn: async (data: BrandingFormData) => {
       const formData = new FormData();
+
+      // Ensure these fields are always included
       formData.append('siteTitle', data.siteTitle);
       formData.append('tabText', data.tabText);
-      if (data.siteLogo) formData.append('siteLogo', data.siteLogo);
-      if (data.favicon) formData.append('favicon', data.favicon);
+
+      // Add files only if they exist
+      if (data.siteLogo instanceof File) {
+        formData.append('siteLogo', data.siteLogo);
+      }
+      if (data.favicon instanceof File) {
+        formData.append('favicon', data.favicon);
+      }
 
       const res = await apiRequest("POST", "/api/admin/branding", formData);
       if (!res.ok) {
