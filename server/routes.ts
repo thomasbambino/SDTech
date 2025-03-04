@@ -11,6 +11,7 @@ import { APIClient } from '@freshbooks/api';
 import passport from "passport";
 import type { User } from "@shared/schema";
 import type { UploadedFile } from "express-fileupload";
+import * as fs from "fs";
 
 const scryptAsync = promisify(scrypt);
 
@@ -803,15 +804,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add after mailgun configuration endpoint
   app.post("/api/admin/branding", requireAdmin, async (req, res) => {
     try {
-      if (!req.files) {
-        return res.status(400).json({ error: "No files were uploaded" });
-      }
-
       const { siteTitle, tabText } = req.body;
-      const siteLogo = req.files.siteLogo as UploadedFile;
-      const favicon = req.files.favicon as UploadedFile;
+      const files = req.files || {};
 
-      // Validate file types
+      // Optional file handling
+      const siteLogo = files.siteLogo as UploadedFile | undefined;
+      const favicon = files.favicon as UploadedFile | undefined;
+
+      // Validate file types if present
       if (siteLogo && !siteLogo.mimetype.startsWith('image/')) {
         return res.status(400).json({ error: "Site logo must be an image file" });
       }
@@ -820,13 +820,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Favicon must be an .ico or .png file" });
       }
 
-      // Move files to public directory
+      // Create uploads directory if it doesn't exist
+      const uploadsDir = './public/uploads';
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      // Move files to public directory if present
+      let logoPath = null;
+      let faviconPath = null;
+
       if (siteLogo) {
-        await siteLogo.mv(`./public/uploads/${siteLogo.name}`);
+        await siteLogo.mv(`${uploadsDir}/${siteLogo.name}`);
+        logoPath = `/uploads/${siteLogo.name}`;
       }
 
       if (favicon) {
-        await favicon.mv(`./public/uploads/${favicon.name}`);
+        await favicon.mv(`${uploadsDir}/${favicon.name}`);
+        faviconPath = `/uploads/${favicon.name}`;
       }
 
       // Update configuration
@@ -837,8 +848,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         data: {
           siteTitle,
           tabText,
-          logoPath: siteLogo ? `/uploads/${siteLogo.name}` : null,
-          faviconPath: favicon ? `/uploads/${favicon.name}` : null,
+          logoPath,
+          faviconPath,
         }
       });
     } catch (error) {
