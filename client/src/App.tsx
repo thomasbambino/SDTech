@@ -2,7 +2,7 @@ import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { AuthProvider } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
@@ -19,12 +19,28 @@ import ClientProfile from "@/pages/client-profile";
 import ProjectDetails from "@/pages/project-details";
 import { ProtectedRoute } from "./lib/protected-route";
 import OAuthCallback from "@/pages/oauth-callback";
+import { Redirect } from "wouter";
 
 function AdminRoute(props: Parameters<typeof ProtectedRoute>[0]) {
   return (
     <ProtectedRoute
       {...props}
       requireRole="admin"
+    />
+  );
+}
+
+function CustomerRoute(props: { path: string; id: string; component: () => JSX.Element }) {
+  return (
+    <ProtectedRoute
+      path={props.path}
+      component={() => {
+        const { user } = useAuth();
+        if (user?.role === 'customer' && user.freshbooksId !== props.id) {
+          return <Redirect to="/" />;
+        }
+        return <props.component />;
+      }}
     />
   );
 }
@@ -36,15 +52,28 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/inquiry" component={CustomerInquiry} />
       <ProtectedRoute path="/change-password" component={ChangePassword} />
-      <ProtectedRoute path="/dashboard" component={Dashboard} />
-      <ProtectedRoute path="/clients/:id" component={ClientProfile} />
-      <ProtectedRoute path="/projects/:id" component={ProjectDetails} />
-      <ProtectedRoute path="/invoices" component={Invoices} />
+
+      {/* Admin-only routes */}
+      <AdminRoute path="/dashboard" component={Dashboard} />
+      <AdminRoute path="/projects" component={Projects} />
+      <AdminRoute path="/invoices" component={Invoices} />
       <AdminRoute path="/admin/users" component={UserManagement} />
       <AdminRoute path="/admin/inquiries" component={InquiriesPage} />
       <AdminRoute path="/admin/settings" component={AdminSettings} />
       <AdminRoute path="/clients" component={Clients} />
-      <AdminRoute path="/projects" component={Projects} />
+
+      {/* Client profile route - accessible by both admin and the specific customer */}
+      <Route path="/clients/:id">
+        {(params) => (
+          <CustomerRoute
+            path={`/clients/${params.id}`}
+            id={params.id}
+            component={ClientProfile}
+          />
+        )}
+      </Route>
+
+      {/* OAuth callback route */}
       <Route path="/auth/callback" component={OAuthCallback} />
       <Route component={NotFound} />
     </Switch>

@@ -12,6 +12,7 @@ import { Laptop } from "lucide-react";
 
 export function NavBar() {
   const { user, logoutMutation } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   return (
     <div className="border-b">
@@ -30,31 +31,31 @@ export function NavBar() {
                 </NavigationMenuLink>
               </Link>
             </NavigationMenuItem>
-            {user ? (
+            {user && (
               <>
-                <NavigationMenuItem>
-                  <Link href="/dashboard">
-                    <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                      Dashboard
-                    </NavigationMenuLink>
-                  </Link>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <Link href="/projects">
-                    <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                      Projects
-                    </NavigationMenuLink>
-                  </Link>
-                </NavigationMenuItem>
-                <NavigationMenuItem>
-                  <Link href="/invoices">
-                    <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                      Invoices
-                    </NavigationMenuLink>
-                  </Link>
-                </NavigationMenuItem>
-                {user.role === "admin" && (
+                {isAdmin ? (
                   <>
+                    <NavigationMenuItem>
+                      <Link href="/dashboard">
+                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                          Dashboard
+                        </NavigationMenuLink>
+                      </Link>
+                    </NavigationMenuItem>
+                    <NavigationMenuItem>
+                      <Link href="/projects">
+                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                          Projects
+                        </NavigationMenuLink>
+                      </Link>
+                    </NavigationMenuItem>
+                    <NavigationMenuItem>
+                      <Link href="/invoices">
+                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                          Invoices
+                        </NavigationMenuLink>
+                      </Link>
+                    </NavigationMenuItem>
                     <NavigationMenuItem>
                       <Link href="/admin/users">
                         <NavigationMenuLink className={navigationMenuTriggerStyle()}>
@@ -84,9 +85,18 @@ export function NavBar() {
                       </Link>
                     </NavigationMenuItem>
                   </>
+                ) : user.role === 'customer' && (
+                  <NavigationMenuItem>
+                    <Link href={`/clients/${user.freshbooksId}`}>
+                      <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                        My Profile
+                      </NavigationMenuLink>
+                    </Link>
+                  </NavigationMenuItem>
                 )}
               </>
-            ) : (
+            )}
+            {!user && (
               <NavigationMenuItem>
                 <Link href="/inquiry">
                   <NavigationMenuLink className={navigationMenuTriggerStyle()}>
