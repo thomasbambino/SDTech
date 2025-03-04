@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Check, X } from "lucide-react";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
+import { MailgunConfigDialog } from "@/components/mailgun-config-dialog";
 
 export default function AdminSettings() {
   const { toast } = useToast();
@@ -165,18 +166,7 @@ export default function AdminSettings() {
                     </div>
                   )}
                 </div>
-                <Button
-                  variant={mailgunStatus?.configured ? "destructive" : "default"}
-                  onClick={() => {
-                    // TODO: Implement Mailgun configuration modal
-                    toast({
-                      title: "Coming Soon",
-                      description: "Mailgun configuration will be available in a future update.",
-                    });
-                  }}
-                >
-                  {mailgunStatus?.configured ? 'Update Configuration' : 'Configure Mailgun'}
-                </Button>
+                <MailgunConfigDialog configured={!!mailgunStatus?.configured} />
               </div>
             </CardContent>
           </Card>

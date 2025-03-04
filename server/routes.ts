@@ -775,6 +775,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add endpoint to update Mailgun configuration
+  app.post("/api/mailgun/update-config", requireAdmin, async (req, res) => {
+    try {
+      // Ask for Mailgun credentials securely  
+      await ask_secrets({
+        secret_keys: ["MAILGUN_API_KEY", "MAILGUN_DOMAIN"],
+        user_message: `
+Please provide your Mailgun credentials:
+
+1. Mailgun API Key (usually starts with 'key-')
+   - Find this in your Mailgun Dashboard under API Keys
+   - Use the Private API Key
+
+2. Mailgun Domain
+   - This is the domain you've configured in Mailgun
+   - Example: mg.yourdomain.com
+
+These credentials will be used for sending emails like password resets and notifications.
+`
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating Mailgun configuration:", error);
+      res.status(500).json({
+        error: "Failed to update Mailgun configuration", 
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/freshbooks/clients/:id", async (req, res) => {
     try {
       console.log("Fetching client details for ID:", req.params.id);
