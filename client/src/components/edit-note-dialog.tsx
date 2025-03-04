@@ -32,7 +32,8 @@ export function EditNoteDialog({ projectId, note }: EditNoteDialogProps) {
         title: "Success",
         description: "Note deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/notes`] });
+      // Use the correct query key format
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "notes"] });
     },
     onError: (error: Error) => {
       toast({
@@ -54,7 +55,11 @@ export function EditNoteDialog({ projectId, note }: EditNoteDialogProps) {
         title: "Success",
         description: "Note updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/notes`] });
+      // Use the correct query key format and force a refetch
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/projects", projectId, "notes"],
+        refetchType: 'all'
+      });
     },
     onError: (error: Error) => {
       toast({

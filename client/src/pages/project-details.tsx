@@ -88,7 +88,7 @@ export default function ProjectDetails() {
     }
   });
 
-  // Fetch project notes
+  // Fetch project notes with shorter stale time
   const { data: notes } = useQuery<ProjectNote[]>({
     queryKey: ["/api/projects", id, "notes"],
     queryFn: async () => {
@@ -98,6 +98,8 @@ export default function ProjectDetails() {
       if (!response.ok) throw new Error("Failed to fetch notes");
       return response.json();
     },
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true // Refetch when component mounts
   });
 
   // Add note mutation
@@ -115,7 +117,10 @@ export default function ProjectDetails() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", id, "notes"] });
+      queryClient.invalidateQueries({ 
+        queryKey: ["/api/projects", id, "notes"],
+        refetchType: 'all'
+      });
       setNewNote("");
       toast({
         title: "Success",
