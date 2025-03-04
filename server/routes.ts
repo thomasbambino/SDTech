@@ -1175,6 +1175,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add project details endpoint after existing project routes
+  app.get("/api/projects/:id", async (req, res) => {
+    try {
+      const projectId = req.params.id;
+      console.log('Fetching project details for ID:', projectId);
+
+      // First try to get project from local database
+      let project = await storage.getProject(Number(projectId));
+
+      // If not found in local DB and user is admin, try Freshbooks
+      if (!project && req.isAuthenticated() && req.user?.role === 'admin') {
+        const tokens = req.session.freshbooksTokens;
+        if (tokens) {
+          // Get the Freshbooks business ID
+          const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+            headers: {
+              'Authorization': `Bearer ${tokens.access_token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (!meResponse.ok) {
+            throw new Error(`Failed to get user details: ${meResponse.status}`);
+          }
+
+          const meData = await meResponse.json();
+          const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+          if (!accountId) {
+            throw new Error("No account ID found in user profile");
+          }
+
+          // Fetch project from Freshbooks
+          const projectResponse = await fetch(
+            `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${tokens.access_token}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          if (!projectResponse.ok) {
+            throw new Error(`Failed to fetch project from Freshbooks: ${projectResponse.status}`);
+          }
+
+          const projectData = await projectResponse.json();
+          project = {
+            id: projectData.id,
+            title: projectData.title,
+            description: projectData.description || '',
+            status: projectData.complete ? 'Completed' : 'Active',
+            createdAt: new Date(projectData.created_at * 1000).toISOString(),
+            clientId: null,
+            freshbooksId: projectData.id.toString(),
+            progress: projectData.complete ? 100 : 0
+          };
+        }
+      }
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      res.json(project);
+    } catch (error) {
+      console.error('Error fetching project:', error);
+      res.status(500).json({
+        error: "Failed to fetch project details",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
 
   // Handle password reset for existing clients
