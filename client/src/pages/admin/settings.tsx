@@ -83,21 +83,28 @@ export default function AdminSettings() {
 
   const brandingMutation = useMutation({
     mutationFn: async (data: BrandingFormData) => {
+      console.log('Submitting branding form with data:', data);
       const formData = new FormData();
 
-      // Ensure these fields are always included
+      // Add text fields
       formData.append('siteTitle', data.siteTitle);
       formData.append('tabText', data.tabText);
 
       // Add files only if they exist
       if (data.siteLogo instanceof File) {
+        console.log('Adding site logo to form:', data.siteLogo.name);
         formData.append('siteLogo', data.siteLogo);
       }
       if (data.favicon instanceof File) {
+        console.log('Adding favicon to form:', data.favicon.name);
         formData.append('favicon', data.favicon);
       }
 
-      const res = await apiRequest("POST", "/api/admin/branding", formData);
+      const res = await apiRequest("POST", "/api/admin/branding", formData, {
+        // Don't set Content-Type header, let the browser set it with the boundary
+        headers: {},
+      });
+
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error || "Failed to update branding");
@@ -105,6 +112,7 @@ export default function AdminSettings() {
       return res.json();
     },
     onSuccess: (data) => {
+      console.log('Branding update successful:', data);
       toast({
         title: "Success",
         description: "Branding settings updated successfully",
@@ -112,6 +120,7 @@ export default function AdminSettings() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/branding"] });
     },
     onError: (error: Error) => {
+      console.error('Branding update failed:', error);
       toast({
         title: "Error",
         description: error.message,
