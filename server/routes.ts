@@ -791,9 +791,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add endpoint to handle Mailgun secrets configuration
   app.post("/api/mailgun/ask-secrets", requireAdmin, async (req, res) => {
     try {
-      await ask_secrets({
-        secret_keys: ["MAILGUN_API_KEY", "MAILGUN_DOMAIN"],
-        user_message: `
+      // Call the ask_secrets tool through code_agent_execute
+      const { success, error } = await (async () => {
+        try {
+          const response = await ask_secrets({
+            secret_keys: ["MAILGUN_API_KEY", "MAILGUN_DOMAIN"],
+            user_message: `
 Please provide your Mailgun credentials:
 
 1. Mailgun API Key (usually starts with 'key-')
@@ -806,7 +809,16 @@ Please provide your Mailgun credentials:
 
 These credentials will be used for sending emails like password resets and notifications.
 `
-      });
+          });
+          return { success: true };
+        } catch (error) {
+          return { error: error instanceof Error ? error.message : String(error) };
+        }
+      })();
+
+      if (error) {
+        throw new Error(error);
+      }
 
       res.json({ success: true });
     } catch (error) {
