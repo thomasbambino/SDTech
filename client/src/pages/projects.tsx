@@ -32,7 +32,7 @@ export default function Projects() {
   const isAdmin = user?.role === 'admin';
 
   // Use different endpoints based on user role
-  const endpoint = "/api/projects";
+  const endpoint = isAdmin ? "/api/freshbooks/projects" : `/api/projects/user/${user?.id}`;
 
   const { data: projects, isLoading, error } = useQuery<Project[]>({
     queryKey: [endpoint],
