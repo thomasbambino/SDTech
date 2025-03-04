@@ -86,29 +86,34 @@ export default function AdminSettings() {
       console.log('Submitting branding form with data:', data);
       const formData = new FormData();
 
-      // Add text fields
-      formData.append('siteTitle', data.siteTitle);
-      formData.append('tabText', data.tabText);
+      // Add text fields with proper validation
+      formData.append('siteTitle', data.siteTitle || '');
+      formData.append('tabText', data.tabText || '');
 
-      // Add files only if they exist
+      // Add files only if they exist and are File objects
       if (data.siteLogo instanceof File) {
         console.log('Adding site logo to form:', data.siteLogo.name);
         formData.append('siteLogo', data.siteLogo);
       }
+
       if (data.favicon instanceof File) {
         console.log('Adding favicon to form:', data.favicon.name);
         formData.append('favicon', data.favicon);
       }
 
-      const res = await apiRequest("POST", "/api/admin/branding", formData, {
-        // Don't set Content-Type header, let the browser set it with the boundary
-        headers: {},
+      // Custom implementation of apiRequest to handle FormData properly
+      const res = await fetch("/api/admin/branding", {
+        method: "POST",
+        body: formData,
+        // Don't set Content-Type header - browser will set it with correct boundary
+        credentials: 'include' // Include cookies for authentication
       });
 
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error || "Failed to update branding");
       }
+
       return res.json();
     },
     onSuccess: (data) => {
@@ -215,7 +220,10 @@ export default function AdminSettings() {
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit((data) => brandingMutation.mutate(data))} className="space-y-4">
+                <form onSubmit={form.handleSubmit((data) => {
+                  console.log('Form submitted with data:', data);
+                  brandingMutation.mutate(data);
+                })} className="space-y-4">
                   <FormField
                     control={form.control}
                     name="siteTitle"
@@ -257,7 +265,10 @@ export default function AdminSettings() {
                               accept="image/*"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
-                                if (file) onChange(file);
+                                if (file) {
+                                  console.log("Selected logo file:", file.name);
+                                  onChange(file);
+                                }
                               }}
                               {...field}
                             />
