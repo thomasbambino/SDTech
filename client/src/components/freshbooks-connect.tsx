@@ -19,6 +19,32 @@ export function FreshbooksConnect() {
     queryKey: ["/api/freshbooks/auth"],
   });
 
+  // Check connection status on mount and URL changes
+  useEffect(() => {
+    checkConnectionStatus();
+
+    // Check URL parameters for connection status
+    const params = new URLSearchParams(location.split("?")[1]);
+    if (params.get("freshbooks") === "connected") {
+      setIsConnected(true);
+      toast({
+        title: "Connected",
+        description: "Successfully connected to Freshbooks with updated permissions.",
+      });
+    }
+  }, [location, toast]);
+
+  const checkConnectionStatus = async () => {
+    try {
+      const response = await fetch("/api/freshbooks/connection-status");
+      const data = await response.json();
+      setIsConnected(data.connected);
+    } catch (error) {
+      console.error("Error checking Freshbooks connection:", error);
+      setIsConnected(false);
+    }
+  };
+
   // Disconnect mutation
   const disconnectMutation = useMutation({
     mutationFn: async () => {
@@ -41,32 +67,6 @@ export function FreshbooksConnect() {
       });
     },
   });
-
-  // Check connection status on mount and URL changes
-  useEffect(() => {
-    checkConnectionStatus();
-
-    // Check URL parameters for connection status
-    const params = new URLSearchParams(location.split("?")[1]);
-    if (params.get("freshbooks") === "connected") {
-      setIsConnected(true);
-      toast({
-        title: "Connected",
-        description: "Successfully connected to Freshbooks with updated permissions.",
-      });
-    }
-  }, [location, toast]);
-
-  const checkConnectionStatus = async () => {
-    try {
-      const response = await fetch("/api/freshbooks/connection-status");
-      const data = await response.json();
-      setIsConnected(data.isConnected);
-    } catch (error) {
-      console.error("Error checking Freshbooks connection:", error);
-      setIsConnected(false);
-    }
-  };
 
   const handleConnect = () => {
     if (!authData?.authUrl) return;

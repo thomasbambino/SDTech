@@ -97,7 +97,7 @@ export default function AdminSettings() {
                 <span>Status:</span>
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
-                ) : freshbooksStatus?.isConnected ? (
+                ) : freshbooksStatus?.connected ? (
                   <div className="flex items-center gap-2 text-green-500">
                     <Check className="h-4 w-4" />
                     <span>Connected</span>
@@ -110,7 +110,7 @@ export default function AdminSettings() {
                 )}
               </div>
 
-              {freshbooksStatus?.isConnected ? (
+              {freshbooksStatus?.connected ? (
                 <Button
                   variant="destructive"
                   onClick={() => disconnectMutation.mutate()}
