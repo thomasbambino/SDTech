@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
+import { BrandingSettings } from "@shared/schema";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -22,7 +23,7 @@ export function NavBar() {
   const { user, logoutMutation } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  const { data: brandingSettings } = useQuery({
+  const { data: brandingSettings } = useQuery<BrandingSettings>({
     queryKey: ["/api/admin/branding"],
   });
 

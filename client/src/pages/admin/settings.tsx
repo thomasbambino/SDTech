@@ -13,15 +13,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { MailgunConfigDialog } from "@/components/mailgun-config-dialog";
+import { BrandingSettings, brandingSchema } from "@shared/schema";
 
-const brandingSchema = z.object({
-  siteTitle: z.string().min(1, "Site title is required"),
-  tabText: z.string().min(1, "Tab text is required"),
+// Extend the schema to include file uploads
+const brandingFormSchema = brandingSchema.extend({
   siteLogo: z.instanceof(File).optional(),
   favicon: z.instanceof(File).optional(),
 });
 
-type BrandingFormData = z.infer<typeof brandingSchema>;
+type BrandingFormData = z.infer<typeof brandingFormSchema>;
 
 export default function AdminSettings() {
   const { toast } = useToast();
@@ -31,16 +31,16 @@ export default function AdminSettings() {
     queryKey: ["/api/freshbooks/connection-status"],
   });
 
-  const { data: mailgunStatus, isLoadingMailgun } = useQuery({
+  const { data: mailgunStatus } = useQuery({
     queryKey: ["/api/mailgun/status"],
   });
 
-  const { data: brandingSettings, isLoading: isLoadingBranding } = useQuery({
+  const { data: brandingSettings, isLoading: isLoadingBranding } = useQuery<BrandingSettings>({
     queryKey: ["/api/admin/branding"],
   });
 
   const form = useForm<BrandingFormData>({
-    resolver: zodResolver(brandingSchema),
+    resolver: zodResolver(brandingFormSchema),
     defaultValues: {
       siteTitle: "",
       tabText: "",
@@ -372,7 +372,7 @@ export default function AdminSettings() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span>Status:</span>
-                    {isLoadingMailgun ? (
+                    {isLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : mailgunStatus?.configured ? (
                       <div className="flex items-center gap-2 text-green-500">

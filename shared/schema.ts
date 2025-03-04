@@ -2,7 +2,17 @@ import { pgTable, text, serial, integer, timestamp, boolean, pgEnum } from "driz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Keep existing enums
+// Add branding settings schema
+export const brandingSchema = z.object({
+  siteTitle: z.string().min(1, "Site title is required"),
+  tabText: z.string().min(1, "Tab text is required"),
+  logoPath: z.string().nullable(),
+  faviconPath: z.string().nullable()
+});
+
+export type BrandingSettings = z.infer<typeof brandingSchema>;
+
+// Keep existing enums and schemas
 export const userRoleEnum = pgEnum("user_role", ["pending", "customer", "admin"]);
 
 // Update users table to include freshbooksId
@@ -71,11 +81,6 @@ export const invoices = pgTable("invoices", {
 });
 
 // Add insert schemas for new tables
-export const insertProjectNoteSchema = createInsertSchema(projectNotes).pick({
-  projectId: true,
-  content: true,
-  createdBy: true,
-});
 
 // Update existing insert schemas
 export const insertProjectSchema = createInsertSchema(projects).pick({
@@ -96,7 +101,6 @@ export const insertDocumentSchema = createInsertSchema(documents).pick({
   uploadedBy: true,
 });
 
-// Keep other existing schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -116,7 +120,6 @@ export const insertInvoiceSchema = createInsertSchema(invoices).pick({
   freshbooksId: true,
 });
 
-// Update the inquiry schema to match Freshbooks fields
 export const insertInquirySchema = createInsertSchema(users).pick({
   email: true,
   phoneNumber: true,
@@ -129,6 +132,13 @@ export const insertInquirySchema = createInsertSchema(users).pick({
   companyName: z.string().optional(),
   details: z.string().min(1, "Please provide details about your inquiry"),
 });
+
+export const insertProjectNoteSchema = createInsertSchema(projectNotes).pick({
+  projectId: true,
+  content: true,
+  createdBy: true,
+});
+
 
 // Export types
 export type InsertUser = z.infer<typeof insertUserSchema>;
