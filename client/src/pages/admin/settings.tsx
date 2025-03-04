@@ -149,7 +149,7 @@ export default function AdminSettings() {
                 <FormField
                   control={form.control}
                   name="siteLogo"
-                  render={({ field: { onChange, ...field } }) => (
+                  render={({ field: { onChange, value, ...field } }) => (
                     <FormItem>
                       <FormLabel>Site Logo</FormLabel>
                       <FormControl>
@@ -162,6 +162,7 @@ export default function AdminSettings() {
                               if (file) onChange(file);
                             }}
                             {...field}
+                            value={undefined} // Remove value prop
                           />
                           {brandingSettings?.logoPath && (
                             <img
@@ -180,7 +181,7 @@ export default function AdminSettings() {
                 <FormField
                   control={form.control}
                   name="favicon"
-                  render={({ field: { onChange, ...field } }) => (
+                  render={({ field: { onChange, value, ...field } }) => (
                     <FormItem>
                       <FormLabel>Favicon</FormLabel>
                       <FormControl>
@@ -193,6 +194,7 @@ export default function AdminSettings() {
                               if (file) onChange(file);
                             }}
                             {...field}
+                            value={undefined} // Remove value prop
                           />
                           {brandingSettings?.faviconPath && (
                             <img
