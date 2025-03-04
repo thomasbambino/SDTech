@@ -45,9 +45,7 @@ type ProjectStage = keyof typeof PROJECT_STAGES;
 const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Date not available';
   try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return 'Invalid date';
-    return date.toLocaleString();
+    return new Date(dateString).toLocaleString();
   } catch (error) {
     console.error('Error formatting date:', error);
     return 'Date not available';
@@ -79,10 +77,14 @@ export default function ProjectDetails() {
   const { data: project, isLoading } = useQuery<Project>({
     queryKey: ["/api/projects", id],
     queryFn: async () => {
+      console.log('Fetching project details for ID:', id);
       const response = await fetch(`/api/projects/${id}`, {
         credentials: 'include'
       });
-      if (!response.ok) throw new Error("Failed to fetch project");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to fetch project");
+      }
       return response.json();
     }
   });

@@ -103,7 +103,7 @@ export default function ClientProfile() {
     enabled: !!client,
     queryFn: async () => {
       // Use different endpoints based on user role
-      const endpoint = isAdmin 
+      const endpoint = isAdmin
         ? `/api/freshbooks/clients/${id}/projects`
         : `/api/projects?clientId=${id}`;
 
@@ -288,7 +288,14 @@ export default function ClientProfile() {
                           </div>
                         )}
                       </div>
-                      <Button variant="outline" className="w-full" asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        asChild
+                        onClick={() => {
+                          console.log('Navigating to project:', project.id);
+                        }}
+                      >
                         <Link href={`/projects/${project.id}`}>View Details</Link>
                       </Button>
                     </CardContent>
