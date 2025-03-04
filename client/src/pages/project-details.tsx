@@ -2,6 +2,7 @@ import { NavBar } from "@/components/nav-bar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Project, ProjectNote } from "@shared/schema";
 import { useParams } from "wouter";
+import { EditNoteDialog } from "@/components/edit-note-dialog";
 import {
   Card,
   CardContent,
@@ -20,10 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Calendar, DollarSign, Edit2, Save, X } from "lucide-react";
+import { Loader2, Calendar, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
 // Project stages with corresponding progress percentages
@@ -68,8 +69,6 @@ export default function ProjectDetails() {
   const { toast } = useToast();
   const [newNote, setNewNote] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
-  const [editedNoteContent, setEditedNoteContent] = useState("");
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
@@ -128,39 +127,6 @@ export default function ProjectDetails() {
       toast({
         title: "Error",
         description: "Failed to add note. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Edit note mutation
-  const editNoteMutation = useMutation({
-    mutationFn: async ({ noteId, content }: { noteId: number; content: string }) => {
-      const response = await fetch(`/api/projects/${id}/notes/${noteId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ content })
-      });
-      if (!response.ok) throw new Error("Failed to update note");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", id, "notes"] });
-      setEditingNoteId(null);
-      setEditedNoteContent("");
-      toast({
-        title: "Success",
-        description: "Note updated successfully",
-      });
-    },
-    onError: (error) => {
-      console.error("Error updating note:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update note. Please try again.",
         variant: "destructive",
       });
     },
@@ -236,25 +202,6 @@ export default function ProjectDetails() {
   const handleFileUpload = () => {
     if (selectedFile) {
       uploadFileMutation.mutate(selectedFile);
-    }
-  };
-
-  const startEditing = (note: ProjectNote) => {
-    setEditingNoteId(note.id);
-    setEditedNoteContent(note.content);
-  };
-
-  const cancelEditing = () => {
-    setEditingNoteId(null);
-    setEditedNoteContent("");
-  };
-
-  const saveEdit = (noteId: number) => {
-    if (editedNoteContent.trim()) {
-      editNoteMutation.mutate({
-        noteId,
-        content: editedNoteContent.trim()
-      });
     }
   };
 
@@ -378,57 +325,19 @@ export default function ProjectDetails() {
                     {notes?.map((note) => (
                       <Card key={note.id}>
                         <CardContent className="pt-6">
-                          {editingNoteId === note.id ? (
-                            <div className="space-y-2">
-                              <Textarea
-                                value={editedNoteContent}
-                                onChange={(e) => setEditedNoteContent(e.target.value)}
-                                className="min-h-[100px]"
-                              />
-                              <div className="flex space-x-2">
-                                <Button
-                                  onClick={() => saveEdit(note.id)}
-                                  disabled={editNoteMutation.isPending}
-                                >
-                                  {editNoteMutation.isPending ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <Save className="h-4 w-4 mr-2" />
-                                      Save
-                                    </>
-                                  )}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  onClick={cancelEditing}
-                                >
-                                  <X className="h-4 w-4 mr-2" />
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <p className="whitespace-pre-wrap">{note.content}</p>
-                              <div className="flex justify-between items-center mt-2 text-sm text-muted-foreground">
-                                <div className="flex items-center gap-2">
-                                  <span>By {note.createdBy === user?.id ? 'You' : `User ${note.createdBy}`}</span>
-                                  {note.createdBy === user?.id && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => startEditing(note)}
-                                      className="h-6 w-6 p-0"
-                                    >
-                                      <Edit2 className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                </div>
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="flex-1">
+                              <p className="whitespace-pre-wrap mb-2">{note.content}</p>
+                              <div className="flex items-center text-sm text-muted-foreground">
+                                <span>By {note.createdBy === user?.id ? 'You' : `User ${note.createdBy}`}</span>
+                                <span className="mx-2">•</span>
                                 <span>{formatDate(note.createdAt)}</span>
                               </div>
-                            </>
-                          )}
+                            </div>
+                            {note.createdBy === user?.id && (
+                              <EditNoteDialog projectId={id} note={note} />
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
@@ -478,24 +387,21 @@ export default function ProjectDetails() {
                 </div>
               </CardContent>
             </Card>
+
             {/* Project Details Card */}
             <Card>
               <CardHeader>
                 <CardTitle>Project Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {project.dueDate && (
-                  <div className="flex items-center">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    <span>Due: {formatDate(project.dueDate)}</span>
-                  </div>
-                )}
-                {project.budget && (
-                  <div className="flex items-center">
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    <span>Budget: ${project.budget.toLocaleString()}</span>
-                  </div>
-                )}
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  <span>Created: {formatDate(project.createdAt?.toString())}</span>
+                </div>
+                <div className="flex items-center">
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  <span>Client: {project.clientId ? `Client ${project.clientId}` : 'Not assigned'}</span>
+                </div>
               </CardContent>
             </Card>
           </div>
