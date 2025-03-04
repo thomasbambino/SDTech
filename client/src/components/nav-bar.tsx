@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -21,12 +22,24 @@ export function NavBar() {
   const { user, logoutMutation } = useAuth();
   const isAdmin = user?.role === 'admin';
 
+  const { data: brandingSettings } = useQuery({
+    queryKey: ["/api/admin/branding"],
+  });
+
   return (
     <div className="border-b">
       <div className="flex h-16 items-center px-4 container mx-auto">
         <Link href="/" className="flex items-center space-x-2 mr-6">
-          <Laptop className="h-6 w-6" />
-          <span className="font-bold">SD Tech Pros</span>
+          {brandingSettings?.logoPath ? (
+            <img 
+              src={brandingSettings.logoPath} 
+              alt="Logo" 
+              className="h-8 w-8 object-contain"
+            />
+          ) : (
+            <Laptop className="h-6 w-6" />
+          )}
+          <span className="font-bold">{brandingSettings?.siteTitle || "SD Tech Pros"}</span>
         </Link>
 
         <NavigationMenu>

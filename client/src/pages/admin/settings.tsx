@@ -35,6 +35,10 @@ export default function AdminSettings() {
     queryKey: ["/api/mailgun/status"],
   });
 
+  const { data: brandingSettings } = useQuery({
+    queryKey: ["/api/admin/branding"],
+  });
+
   // Show toast based on URL parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -54,9 +58,31 @@ export default function AdminSettings() {
     }
   }, [location, toast]);
 
+  useEffect(() => {
+    if (brandingSettings) {
+      form.reset(brandingSettings);
+
+      // Update page title and favicon
+      document.title = brandingSettings.tabText;
+      const existingFavicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+
+      if (brandingSettings.faviconPath) {
+        if (existingFavicon) {
+          existingFavicon.href = brandingSettings.faviconPath;
+        } else {
+          const favicon = document.createElement('link');
+          favicon.rel = 'icon';
+          favicon.href = brandingSettings.faviconPath;
+          document.head.appendChild(favicon);
+        }
+      }
+    }
+  }, [brandingSettings]);
+
+
   const form = useForm<BrandingFormData>({
     resolver: zodResolver(brandingSchema),
-    defaultValues: {
+    defaultValues: brandingSettings || {
       siteTitle: "SD Tech Pros",
       tabText: "SD Tech Pros - Client Management",
     }
@@ -240,8 +266,8 @@ export default function AdminSettings() {
                     )}
                   />
 
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     className="w-full"
                     disabled={brandingMutation.isPending}
                   >

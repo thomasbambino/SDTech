@@ -801,7 +801,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add after mailgun configuration endpoint
+  // Add the GET endpoint for branding settings
+  app.get("/api/admin/branding", requireAdmin, async (req, res) => {
+    try {
+      // For now, we'll store branding settings in a JSON file
+      const settingsPath = './public/branding-settings.json';
+      let settings = {
+        siteTitle: "SD Tech Pros",
+        tabText: "SD Tech Pros - Client Management",
+        logoPath: null,
+        faviconPath: null
+      };
+
+      if (fs.existsSync(settingsPath)) {
+        const data = await fs.promises.readFile(settingsPath, 'utf8');
+        settings = JSON.parse(data);
+      }
+
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching branding settings:", error);
+      res.status(500).json({
+        error: "Failed to fetch branding settings",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Update the POST endpoint to store settings
   app.post("/api/admin/branding", requireAdmin, async (req, res) => {
     try {
       const { siteTitle, tabText } = req.body;
@@ -840,17 +867,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         faviconPath = `/uploads/${favicon.name}`;
       }
 
-      // Update configuration
-      // TODO: Store these settings in the database
+      // Store settings in a JSON file
+      const settings = {
+        siteTitle,
+        tabText,
+        logoPath: logoPath || (fs.existsSync('./public/branding-settings.json') ? 
+          JSON.parse(await fs.promises.readFile('./public/branding-settings.json', 'utf8')).logoPath : 
+          null),
+        faviconPath: faviconPath || (fs.existsSync('./public/branding-settings.json') ? 
+          JSON.parse(await fs.promises.readFile('./public/branding-settings.json', 'utf8')).faviconPath : 
+          null)
+      };
+
+      await fs.promises.writeFile('./public/branding-settings.json', JSON.stringify(settings, null, 2));
+
       res.json({
         success: true,
         message: "Branding settings updated successfully",
-        data: {
-          siteTitle,
-          tabText,
-          logoPath,
-          faviconPath,
-        }
+        data: settings
       });
     } catch (error) {
       console.error("Error updating branding:", error);
