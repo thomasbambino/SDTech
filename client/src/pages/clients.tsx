@@ -12,6 +12,12 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface FreshbooksClient {
   id: string;
@@ -33,10 +39,12 @@ export default function ClientsPage() {
   });
 
   const filteredClients = clients?.filter(client => {
-    const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         client.organization.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         client.phone.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchTermLower = searchTerm.toLowerCase();
+    const matchesSearch = client.name.toLowerCase().includes(searchTermLower) ||
+                         client.organization.toLowerCase().includes(searchTermLower) ||
+                         client.email.toLowerCase().includes(searchTermLower) ||
+                         client.phone.toLowerCase().includes(searchTermLower) ||
+                         client.address.toLowerCase().includes(searchTermLower);
 
     const matchesStatus = statusFilter === "all" || client.status.toLowerCase() === statusFilter.toLowerCase();
 
@@ -61,13 +69,23 @@ export default function ClientsPage() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="search">Search</Label>
-                    <Input
-                      id="search"
-                      placeholder="Search by name, organization, email, or phone"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      title="Search clients by their name, organization, email address, or phone number"
-                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            <Input
+                              id="search"
+                              placeholder="Search clients..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          <p className="max-w-xs">Search clients by their name, organization, email address, phone number, or address</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="status">Status</Label>
