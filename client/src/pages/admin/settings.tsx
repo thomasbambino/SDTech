@@ -103,6 +103,48 @@ export default function AdminSettings() {
     },
   });
 
+  const disconnectMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/freshbooks/disconnect");
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to disconnect from Freshbooks");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/freshbooks/connection-status"] });
+      toast({
+        title: "Success",
+        description: "Disconnected from Freshbooks successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const connectToFreshbooks = async () => {
+    try {
+      const res = await apiRequest("GET", "/api/freshbooks/auth");
+      if (!res.ok) {
+        throw new Error("Failed to get Freshbooks authentication URL");
+      }
+      const { authUrl } = await res.json();
+      window.location.href = authUrl;
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to connect to Freshbooks",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Show toast based on URL parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
