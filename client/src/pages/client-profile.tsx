@@ -10,8 +10,6 @@ import { EditClientDialog } from "@/components/edit-client-dialog";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { EditProjectDialog } from "@/components/edit-project-dialog";
 import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface Project {
   id: string;
@@ -27,11 +25,6 @@ interface Project {
   projectType?: string;
   billedAmount?: string;
   billedStatus?: string;
-  services?: Array<{
-    id: number;
-    name: string;
-    billable: boolean;
-  }>;
 }
 
 interface FreshbooksClient {
@@ -48,28 +41,38 @@ interface FreshbooksClient {
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const { toast } = useToast();
   const isAdmin = user?.role === 'admin';
   const isOwnProfile = user?.role === 'customer' && user.freshbooksId === id;
 
-  const shouldCheckFreshbooks = isAdmin;
-
-  const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
+  // For admin users, fetch data from Freshbooks
+  const { data: clientData, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", id],
+    enabled: isAdmin,
     queryFn: async () => {
-      console.log(`Fetching client with ID: ${id}`);
       const response = await fetch(`/api/freshbooks/clients/${id}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Error: ${response.status}`);
       }
       return response.json();
-    },
-    enabled: shouldCheckFreshbooks
+    }
   });
+
+  // For customer users, use their own data
+  const client = isOwnProfile ? {
+    id: user.freshbooksId!,
+    name: user.username,
+    organization: user.companyName || '',
+    email: user.email,
+    phone: user.phoneNumber || '',
+    address: user.address || '',
+    status: 'Active',
+    createdDate: new Date(user.createdAt || '').toLocaleString()
+  } : clientData;
 
   const { data: projects, isLoading: isLoadingProjects, error: projectsError } = useQuery<Project[]>({
     queryKey: ["/api/freshbooks/clients", id, "projects"],
+    enabled: !!client,
     queryFn: async () => {
       const response = await fetch(`/api/freshbooks/clients/${id}/projects`);
       if (!response.ok) {
@@ -77,49 +80,10 @@ export default function ClientProfile() {
         throw new Error(errorData.error || `Error: ${response.status}`);
       }
       return response.json();
-    },
-    enabled: shouldCheckFreshbooks && !!client 
+    }
   });
 
-  if (isOwnProfile && (isLoadingClient || clientError)) {
-    return (
-      <div className="min-h-screen bg-background">
-        <NavBar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h2 className="text-2xl font-semibold">{user.username}</h2>
-                      <p className="text-sm text-muted-foreground">{user.companyName}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      <span>{user.email}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="lg:col-span-2">
-              <h2 className="text-2xl font-semibold mb-4">Projects</h2>
-              <Alert>
-                <AlertDescription>
-                  Loading project information...
-                </AlertDescription>
-              </Alert>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoadingClient) {
+  if (isLoadingClient && isAdmin) {
     return (
       <div className="min-h-screen bg-background">
         <NavBar />
@@ -130,7 +94,7 @@ export default function ClientProfile() {
     );
   }
 
-  if (clientError || !client) {
+  if (clientError && isAdmin) {
     return (
       <div className="min-h-screen bg-background">
         <NavBar />
@@ -139,6 +103,22 @@ export default function ClientProfile() {
             <AlertDescription>
               {clientError instanceof Error ? clientError.message : `Unable to load client details`}
             </AlertDescription>
+          </Alert>
+          <Button variant="outline" className="mt-4" asChild>
+            <Link href="/clients">Back to Clients</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!client) {
+    return (
+      <div className="min-h-screen bg-background">
+        <NavBar />
+        <div className="container mx-auto px-4 py-8">
+          <Alert variant="destructive">
+            <AlertDescription>Client not found</AlertDescription>
           </Alert>
           <Button variant="outline" className="mt-4" asChild>
             <Link href="/clients">Back to Clients</Link>
