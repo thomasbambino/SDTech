@@ -88,9 +88,7 @@ export default function ClientProfile() {
   // For customer users, use their own data
   const client = isOwnProfile ? {
     id: user.freshbooksId!,
-    name: user.firstName && user.lastName
-      ? `${user.firstName} ${user.lastName}`
-      : user.username.split('@')[0],
+    name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
     organization: user.companyName || '',
     email: user.email,
     phone: user.phoneNumber || '',
@@ -101,12 +99,14 @@ export default function ClientProfile() {
 
   // Projects query based on user role
   const { data: projects, isLoading: isLoadingProjects, error: projectsError } = useQuery<Project[]>({
-    queryKey: ["/api/projects", id],
-    enabled: !!id,
+    queryKey: ["/api/freshbooks/clients", id, "projects"],
+    enabled: !!client,
     queryFn: async () => {
+      // Use different endpoints based on user role
       const endpoint = isAdmin 
-        ? `/api/projects`
+        ? `/api/freshbooks/clients/${id}/projects`
         : `/api/projects?clientId=${id}`;
+
       const response = await fetch(endpoint);
       if (!response.ok) {
         const errorData = await response.json();
@@ -289,9 +289,7 @@ export default function ClientProfile() {
                         )}
                       </div>
                       <Button variant="outline" className="w-full" asChild>
-                        <Link href={isAdmin ? `/projects/${project.id}` : `/clients/${id}/projects/${project.id}`}>
-                          View Details
-                        </Link>
+                        <Link href={`/projects/${project.id}`}>View Details</Link>
                       </Button>
                     </CardContent>
                   </Card>
