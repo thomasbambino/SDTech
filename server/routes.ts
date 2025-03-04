@@ -933,6 +933,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add project details endpoint
+  app.get("/api/projects/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const projectId = Number(req.params.id);
+      console.log('Fetching project details for ID:', projectId);
+
+      // Get project from local database
+      const project = await storage.getProject(projectId);
+
+      if (!project) {
+        console.log('Project not found:', projectId);
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      console.log('Project found:', {
+        id: project.id,
+        title: project.title,
+        clientId: project.clientId
+      });
+
+      // Verify user has access to this project
+      const authenticatedUser = req.user as Express.User;
+      if (authenticatedUser.role !== 'admin') {
+        if (!project.clientId || project.clientId !== authenticatedUser.id) {
+          console.log('Access denied:', {
+            userId: authenticatedUser.id,
+            userRole: authenticatedUser.role,
+            projectClientId: project.clientId
+          });
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+
+      res.json(project);
+    } catch (error) {
+      console.error('Error fetching project:', error);
+      res.status(500).json({
+        error: "Failed to fetch project details",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Add project note deletion endpoint
   app.delete("/api/projects/:projectId/notes/:noteId", async (req, res) => {
     try {
