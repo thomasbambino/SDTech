@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema, insertInquirySchema, brandingSchema } from "@shared/schema";
+import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema, insertInquirySchema } from "@shared/schema";
 import { freshbooksService } from "./services/freshbooks";
 import { emailService } from "./services/email";
 import { scrypt, randomBytes } from "crypto";
@@ -828,16 +828,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update the POST endpoint to handle file uploads properly
   app.post("/api/admin/branding", requireAdmin, async (req, res) => {
     try {
-      // Validate required text fields
-      if (!req.body.siteTitle || !req.body.tabText) {
+      console.log('Received branding update request:', {
+        body: req.body,
+        files: req.files ? Object.keys(req.files) : 'no files'
+      });
+
+      const { siteTitle, tabText } = req.body;
+      if (!siteTitle || !tabText) {
         return res.status(400).json({
           error: "Site title and tab text are required"
         });
       }
 
-      // Create required directories
+      // Ensure directories exist with proper permissions
       const publicDir = './public';
       const uploadsDir = './public/uploads';
       
@@ -853,6 +859,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const siteLogo = files.siteLogo as UploadedFile | undefined;
       const favicon = files.favicon as UploadedFile | undefined;
 
+      console.log('Processing uploaded files:', {
+        siteLogo: siteLogo?.name,
+        favicon: favicon?.name
+      });
+
       // Get existing settings
       const settingsPath = './public/branding-settings.json';
       let existingSettings = {
@@ -867,7 +878,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         existingSettings = JSON.parse(data);
       }
 
-      // Process uploaded files
+      // Process new files
       let logoPath = existingSettings.logoPath;
       let faviconPath = existingSettings.faviconPath;
 
@@ -893,21 +904,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update settings
       const settings = {
-        siteTitle: req.body.siteTitle,
-        tabText: req.body.tabText,
+        siteTitle,
+        tabText,
         logoPath,
         faviconPath
       };
 
-      // Validate settings against schema
-      brandingSchema.parse(settings);
-
-      // Save settings
+      // Write settings file
       await fs.promises.writeFile(
         settingsPath,
         JSON.stringify(settings, null, 2),
         { mode: 0o644 }
       );
+
+      console.log('Successfully updated branding settings:', settings);
 
       res.json({
         success: true,

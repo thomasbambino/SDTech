@@ -2,7 +2,7 @@ import { pgTable, text, serial, integer, timestamp, boolean, pgEnum } from "driz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Update the branding schema to be simpler and more focused
+// Add branding settings schema
 export const brandingSchema = z.object({
   siteTitle: z.string().min(1, "Site title is required"),
   tabText: z.string().min(1, "Tab text is required"),

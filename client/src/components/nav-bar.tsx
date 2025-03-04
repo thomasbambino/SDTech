@@ -18,7 +18,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, Laptop, Settings, Users, LogOut } from "lucide-react";
-import React from 'react';
 
 export function NavBar() {
   const { user, logoutMutation } = useAuth();
@@ -27,13 +26,6 @@ export function NavBar() {
   const { data: brandingSettings } = useQuery<BrandingSettings>({
     queryKey: ["/api/admin/branding"],
   });
-
-  // Update page title whenever branding settings change
-  React.useEffect(() => {
-    if (brandingSettings?.tabText) {
-      document.title = brandingSettings.tabText;
-    }
-  }, [brandingSettings?.tabText]);
 
   return (
     <div className="border-b">
