@@ -943,17 +943,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const projectId = Number(req.params.projectId);
       const noteId = Number(req.params.noteId);
 
-      // Verify the project exists and user has access
-      const project = await storage.getProject(projectId);
-      if (!project) {
-        return res.status(404).json({ error: "Project not found" });
+      // First verify the note exists and belongs to the project  
+      const note = await storage.getProjectNote(noteId);
+      if (!note) {
+        return res.status(404).json({ error: "Note not found" });
       }
 
-      // Only admin or the project's client can delete notes
-      if (req.user.role !== 'admin') {
-        if (!project.clientId || project.clientId !== req.user.id) {
-          return res.status(403).json({ error: "Access denied" });
-        }
+      if (note.projectId !== projectId) {
+        return res.status(400).json({ error: "Note does not belong to this project" });
+      }
+
+      // Verify user has permission to delete the note
+      if (req.user.role !== 'admin' && note.createdBy !== req.user.id) {
+        return res.status(403).json({ error: "You don't have permission to delete this note" });
       }
 
       // Delete the note
@@ -963,7 +965,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting project note:", error);
       res.status(500).json({
-        error: "Failed to delete note",
+        error: "Failed to delete note", 
         details: error instanceof Error ? error.message : String(error)
       });
     }

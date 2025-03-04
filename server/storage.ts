@@ -36,6 +36,7 @@ export interface IStorage {
   getProjectByFreshbooksId(freshbooksId: string): Promise<Project | undefined>;
 
   // Project Notes
+  getProjectNote(id: number): Promise<ProjectNote | undefined>;
   getProjectNotes(projectId: number): Promise<ProjectNote[]>;
   createProjectNote(note: InsertProjectNote): Promise<ProjectNote>;
   updateProjectNote(id: number, note: Partial<ProjectNote>): Promise<ProjectNote>;
@@ -143,7 +144,7 @@ export class DatabaseStorage implements IStorage {
       const results = await db
         .select()
         .from(projects)
-        .where(eq(projects.freshbooksId, Number(freshbooksId)));
+        .where(eq(projects.freshbooksId, freshbooksId));
       return results[0];
     } catch (error) {
       console.error('Error in getProjectByFreshbooksId:', error);
@@ -151,12 +152,20 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getProjectNote(id: number): Promise<ProjectNote | undefined> {
+    const results = await db
+      .select()
+      .from(projectNotes)
+      .where(eq(projectNotes.id, id));
+    return results[0];
+  }
+
   async getProjectNotes(projectId: number): Promise<ProjectNote[]> {
     return await db
       .select()
       .from(projectNotes)
       .where(eq(projectNotes.projectId, projectId))
-      .orderBy(desc(projectNotes.createdAt)); // Changed to desc for newest first
+      .orderBy(desc(projectNotes.createdAt)); 
   }
 
   async createProjectNote(note: InsertProjectNote): Promise<ProjectNote> {
@@ -172,14 +181,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProjectNote(id: number, note: Partial<ProjectNote>): Promise<ProjectNote> {
-    const [updatedNote] = await db.update(projectNotes).set(note).where(eq(projectNotes.id, id)).returning();
+    const [updatedNote] = await db
+      .update(projectNotes)
+      .set({
+        ...note,
+        updatedAt: new Date()
+      })
+      .where(eq(projectNotes.id, id))
+      .returning();
     return updatedNote;
   }
 
   async deleteProjectNote(id: number): Promise<void> {
     await db.delete(projectNotes).where(eq(projectNotes.id, id));
   }
-
 
   async getInvoices(projectId: number): Promise<Invoice[]> {
     return await db.select().from(invoices).where(eq(invoices.projectId, projectId));
@@ -210,6 +225,7 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return newDocument;
   }
+
   async getUserByFreshbooksId(freshbooksId: string): Promise<User | undefined> {
     try {
       console.log("Looking up user by Freshbooks ID:", freshbooksId);
