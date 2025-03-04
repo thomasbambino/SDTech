@@ -62,6 +62,16 @@ function Router() {
       <AdminRoute path="/admin/settings" component={AdminSettings} />
       <AdminRoute path="/clients" component={Clients} />
 
+      {/* Project details route - accessible by both admin and the client */}
+      <Route path="/projects/:id">
+        {(params) => (
+          <ProtectedRoute
+            path={`/projects/${params.id}`}
+            component={ProjectDetails}
+          />
+        )}
+      </Route>
+
       {/* Client profile route - accessible by both admin and the specific customer */}
       <Route path="/clients/:id">
         {(params) => (
