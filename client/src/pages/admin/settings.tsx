@@ -74,7 +74,7 @@ export default function AdminSettings() {
         throw new Error(error.error || 'Failed to update branding');
       }
 
-      const result = await response.json();
+      await response.json();
 
       toast({
         title: "Success",
@@ -226,90 +226,6 @@ export default function AdminSettings() {
             </Form>
           </CardContent>
         </Card>
-        {/* Right Column - Integration Settings */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Freshbooks Integration</CardTitle>
-              <CardDescription>
-                Connect your Freshbooks account to enable client management and invoicing features.
-                This connection will be used across all features of the application.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span>Status:</span>
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : freshbooksStatus?.connected ? (
-                    <div className="flex items-center gap-2 text-green-500">
-                      <Check className="h-4 w-4" />
-                      <span>Connected</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-red-500">
-                      <X className="h-4 w-4" />
-                      <span>Not Connected</span>
-                    </div>
-                  )}
-                </div>
-
-                {freshbooksStatus?.connected ? (
-                  <Button
-                    variant="destructive"
-                    onClick={() => disconnectMutation.mutate()}
-                    disabled={disconnectMutation.isPending}
-                  >
-                    {disconnectMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Disconnecting...
-                      </>
-                    ) : (
-                      'Disconnect'
-                    )}
-                  </Button>
-                ) : (
-                  <Button onClick={connectToFreshbooks}>
-                    Connect to Freshbooks
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Mailgun Integration</CardTitle>
-              <CardDescription>
-                Configure Mailgun settings for sending automated emails, notifications, and client communications.
-                This integration is essential for password resets and system notifications.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span>Status:</span>
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : mailgunStatus?.configured ? (
-                    <div className="flex items-center gap-2 text-green-500">
-                      <Check className="h-4 w-4" />
-                      <span>Configured</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-red-500">
-                      <X className="h-4 w-4" />
-                      <span>Not Configured</span>
-                    </div>
-                  )}
-                </div>
-                <MailgunConfigDialog configured={!!mailgunStatus?.configured} />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );
