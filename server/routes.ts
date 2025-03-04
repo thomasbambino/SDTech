@@ -867,31 +867,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authenticatedUser = req.user as Express.User;
       
       // For customers, only return their own projects
-      if (authenticatedUser.role === 'customer' && authenticatedUser.freshbooksId) {
-        // Get the account ID from Freshbooks API
+      if (authenticatedUser.role === 'customer') {
+        // Get projects directly from Freshbooks using admin token
+        const adminToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
+        if (!adminToken) {
+          throw new Error("Admin token not configured");
+        }
+
+        // First get the account ID using admin token
         const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
           headers: {
-            'Authorization': `Bearer ${req.session.freshbooksTokens?.access_token}`,
+            'Authorization': `Bearer ${adminToken}`,
             'Content-Type': 'application/json'
           }
         });
 
         if (!meResponse.ok) {
-          throw new Error(`Failed to get user details: ${meResponse.status}`);
+          throw new Error(`Failed to get account details: ${meResponse.status}`);
         }
 
         const meData = await meResponse.json();
         const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
 
         if (!accountId) {
-          throw new Error("No account ID found in user profile");
+          throw new Error("No account ID found in admin profile");
         }
 
+        // Then get the projects using admin token
         const response = await fetch(
           `https://api.freshbooks.com/accounting/account/${accountId}/users/clients/${authenticatedUser.freshbooksId}/projects`,
           {
             headers: {
-              'Authorization': `Bearer ${req.session.freshbooksTokens?.access_token}`,
+              'Authorization': `Bearer ${adminToken}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch projects: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("Raw projects data:", data);
+
+        const formattedProjects = data.response.result.projects.map(project => ({
+          id: project.id.toString(),
+          title: project.title,
+          description: project.description,
+          status: project.active ? 'Active' : 'Inactive',
+          dueDate: project.due_date,
+          budget: project.budget,
+          fixedPrice: project.fixed_price,
+          createdAt: project.created_at,
+          clientId: project.client_id.toString(),
+          billingMethod: project.billing_method,
+          projectType: project.project_type,
+          billedAmount: project.billed_amount,
+          billedStatus: project.billed_status
+        }));
+
+        console.log("Formatted projects:", formattedProjects);
+        return res.json(formattedProjects);
+      }
+
+      // For admins, return all projects
+      if (authenticatedUser.role === 'admin') {
+        const adminToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
+        if (!adminToken) {
+          throw new Error("Admin token not configured");
+        }
+
+        // First get the account ID
+        const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+          headers: {
+            'Authorization': `Bearer ${adminToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!meResponse.ok) {
+          throw new Error(`Failed to get account details: ${meResponse.status}`);
+        }
+
+        const meData = await meResponse.json();
+        const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+        if (!accountId) {
+          throw new Error("No account ID found in admin profile");
+        }
+
+        // Get all projects using admin token
+        const response = await fetch(
+          `https://api.freshbooks.com/accounting/account/${accountId}/projects`,
+          {
+            headers: {
+              'Authorization': `Bearer ${adminToken}`,
               'Content-Type': 'application/json'
             }
           }
@@ -921,10 +992,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(formattedProjects);
       }
 
-      // For other roles or cases where freshbooksId is not available
-      return res.status(403).json({ 
-        error: "Access denied. Insufficient permissions or missing client ID." 
-      });
+      // For other roles
+      return res.status(403).json({ error: "Access denied. Insufficient permissions." });
     } catch (error) {
       console.error("Error fetching projects:", error);
       res.status(500).json({
