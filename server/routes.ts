@@ -940,11 +940,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      const projectId = Number(req.params.id);
+      const projectId = req.params.id;
       console.log('Fetching project details for ID:', projectId);
 
-      // Get project from local database
-      const project = await storage.getProject(projectId);
+      // First try to get project by Freshbooks ID
+      let project = await storage.getProjectByFreshbooksId(projectId);
+      
+      if (!project) {
+        // If not found by Freshbooks ID, try local numeric ID
+        const numericId = Number(projectId);
+        if (!isNaN(numericId)) {
+          project = await storage.getProject(numericId);
+        }
+      }
 
       if (!project) {
         console.log('Project not found:', projectId);
@@ -954,7 +962,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Project found:', {
         id: project.id,
         title: project.title,
-        clientId: project.clientId
+        clientId: project.clientId,
+        freshbooksId: project.freshbooksId
       });
 
       // Verify user has access to this project
@@ -967,6 +976,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
             projectClientId: project.clientId
           });
           return res.status(403).json({ error: "Access denied" });
+        }
+      }
+
+      // If admin and project not found locally, try Freshbooks
+      if (!project.freshbooksId && authenticatedUser.role === 'admin') {
+        try {
+          console.log('Admin user, checking Freshbooks for project');
+          const tokens = req.session.freshbooksTokens;
+          if (tokens?.access_token) {
+            // Get business account ID
+            const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+              headers: {
+                'Authorization': `Bearer ${tokens.access_token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            if (!meResponse.ok) {
+              throw new Error(`Failed to get account details: ${meResponse.status}`);
+            }
+
+            const meData = await meResponse.json();
+            const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+            if (!accountId) {
+              throw new Error("No account ID found in profile");
+            }
+
+            // Fetch project from Freshbooks
+            const fbResponse = await fetch(
+              `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${tokens.access_token}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            if (fbResponse.ok) {
+              const fbData = await fbResponse.json();
+              const fbProject = fbData.response.result.project;
+
+              // Update local record with Freshbooks data
+              project = {
+                ...project,
+                freshbooksId: fbProject.id.toString(),
+                status: fbProject.complete ? 'Completed' : 'Active',
+                title: fbProject.title || project.title,
+                description: fbProject.description || project.description,
+                progress: fbProject.complete ? 100 : project.progress
+              };
+
+              console.log('Updated project with Freshbooks data:', project);
+            }
+          }
+        } catch (fbError) {
+          console.error('Error fetching from Freshbooks:', fbError);
+          // Continue with local data if Freshbooks fails
         }
       }
 

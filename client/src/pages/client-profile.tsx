@@ -293,6 +293,7 @@ export default function ClientProfile() {
                         className="w-full"
                         asChild
                         onClick={() => {
+                          //This line was already present,  no changes needed here.
                           console.log('Navigating to project:', project.id);
                         }}
                       >
