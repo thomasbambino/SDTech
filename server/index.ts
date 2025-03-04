@@ -30,15 +30,18 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Configure file upload middleware
+// Configure file upload middleware with proper error handling
 app.use(fileUpload({
   createParentPath: true,
   limits: { 
-    fileSize: 50 * 1024 * 1024 // 50MB max file size
+    fileSize: 10 * 1024 * 1024 // 10MB max file size
   },
   abortOnLimit: true,
-  useTempFiles: true,
-  tempFileDir: '/tmp/'
+  responseOnLimit: "File size limit reached (10MB)",
+  useTempFiles: false, // Store files in memory
+  debug: true, // Enable debug mode for better error logging
+  safeFileNames: true, // Remove special characters from filenames
+  preserveExtension: true // Keep file extensions
 }));
 
 // Configure session middleware first

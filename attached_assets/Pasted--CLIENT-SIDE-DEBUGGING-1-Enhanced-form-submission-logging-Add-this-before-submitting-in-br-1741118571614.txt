@@ -1,0 +1,196 @@
+// CLIENT-SIDE DEBUGGING
+
+// 1. Enhanced form submission logging
+// Add this before submitting in brandingMutation.mutationFn
+const brandingMutation = useMutation({
+  mutationFn: async (data: BrandingFormData) => {
+    // Detailed logging
+    console.log('Submitting branding form with data:', data);
+    console.log('Site title:', data.siteTitle);
+    console.log('Tab text:', data.tabText);
+    console.log('Site logo:', data.siteLogo ? {
+      name: data.siteLogo.name,
+      type: data.siteLogo.type,
+      size: data.siteLogo.size
+    } : 'No logo file');
+    console.log('Favicon:', data.favicon ? {
+      name: data.favicon.name,
+      type: data.favicon.type,
+      size: data.favicon.size
+    } : 'No favicon file');
+    
+    const formData = new FormData();
+
+    // Add text fields
+    formData.append('siteTitle', data.siteTitle);
+    formData.append('tabText', data.tabText);
+
+    // Add files only if they exist
+    if (data.siteLogo instanceof File) {
+      console.log('Adding site logo to form:', data.siteLogo.name);
+      formData.append('siteLogo', data.siteLogo);
+    }
+    if (data.favicon instanceof File) {
+      console.log('Adding favicon to form:', data.favicon.name);
+      formData.append('favicon', data.favicon);
+    }
+
+    // Log FormData (note: can't directly log content)
+    console.log('FormData created with entries');
+    
+    // Log request before sending
+    console.log('Sending request to /api/admin/branding');
+    
+    try {
+      const res = await apiRequest("POST", "/api/admin/branding", formData, {
+        headers: {}, // Don't set Content-Type header for FormData
+      });
+      
+      console.log('Response status:', res.status);
+      
+      if (!res.ok) {
+        const error = await res.json();
+        console.error('Error response:', error);
+        throw new Error(error.error || "Failed to update branding");
+      }
+      
+      const responseData = await res.json();
+      console.log('Success response:', responseData);
+      return responseData;
+    } catch (error) {
+      console.error('Request error:', error);
+      throw error;
+    }
+  },
+  // Rest of the mutation config remains the same
+});
+
+// SERVER-SIDE DEBUGGING
+
+// Add more detailed logging in the server-side handler
+app.post("/api/admin/branding", requireAdmin, async (req, res) => {
+  try {
+    console.log('Received branding update request:', {
+      body: req.body,
+      files: req.files ? Object.keys(req.files) : 'no files'
+    });
+    
+    // Log file details if present
+    if (req.files && req.files.siteLogo) {
+      console.log('Site logo details:', {
+        name: req.files.siteLogo.name,
+        mimetype: req.files.siteLogo.mimetype,
+        size: req.files.siteLogo.size,
+        md5: req.files.siteLogo.md5
+      });
+    }
+    
+    if (req.files && req.files.favicon) {
+      console.log('Favicon details:', {
+        name: req.files.favicon.name,
+        mimetype: req.files.favicon.mimetype,
+        size: req.files.favicon.size,
+        md5: req.files.favicon.md5
+      });
+    }
+    
+    // Check for public directory and create if needed
+    const publicDir = './public';
+    const uploadsDir = './public/uploads';
+    
+    console.log('Checking directories:', {
+      publicExists: fs.existsSync(publicDir),
+      uploadsExists: fs.existsSync(uploadsDir)
+    });
+    
+    if (!fs.existsSync(publicDir)) {
+      console.log('Creating public directory');
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+    
+    if (!fs.existsSync(uploadsDir)) {
+      console.log('Creating uploads directory');
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
+    // Process files and complete the request...
+    // (existing code)
+    
+    // Add logging before writing the settings file
+    console.log('Saving branding settings to:', settingsPath);
+    
+    // Add logging after saving the file
+    console.log('Settings saved successfully');
+    
+    // Return detailed response
+    res.json({
+      success: true,
+      message: "Branding settings updated successfully",
+      data: settings,
+      filesSaved: {
+        logo: logoPath !== null,
+        favicon: faviconPath !== null
+      }
+    });
+  } catch (error) {
+    console.error("Error updating branding:", error);
+    console.error("Error stack:", error.stack);
+    res.status(500).json({
+      error: "Failed to update branding settings",
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// FILE ACCESS DEBUGGING
+
+// Check file permissions on the server
+const checkFilePermissions = () => {
+  try {
+    const publicDir = './public';
+    const uploadsDir = './public/uploads';
+    const settingsPath = './public/branding-settings.json';
+    
+    console.log('File permissions check:');
+    
+    if (fs.existsSync(publicDir)) {
+      const publicStats = fs.statSync(publicDir);
+      console.log('Public directory:', {
+        exists: true,
+        mode: publicStats.mode.toString(8), // octal representation
+        writable: fs.accessSync(publicDir, fs.constants.W_OK) === undefined
+      });
+    } else {
+      console.log('Public directory does not exist');
+    }
+    
+    if (fs.existsSync(uploadsDir)) {
+      const uploadsStats = fs.statSync(uploadsDir);
+      console.log('Uploads directory:', {
+        exists: true,
+        mode: uploadsStats.mode.toString(8),
+        writable: fs.accessSync(uploadsDir, fs.constants.W_OK) === undefined
+      });
+    } else {
+      console.log('Uploads directory does not exist');
+    }
+    
+    if (fs.existsSync(settingsPath)) {
+      const settingsStats = fs.statSync(settingsPath);
+      console.log('Settings file:', {
+        exists: true,
+        mode: settingsStats.mode.toString(8),
+        writable: fs.accessSync(settingsPath, fs.constants.W_OK) === undefined,
+        size: settingsStats.size,
+        content: fs.readFileSync(settingsPath, 'utf8').substring(0, 100) + '...'
+      });
+    } else {
+      console.log('Settings file does not exist');
+    }
+  } catch (error) {
+    console.error('Error checking permissions:', error);
+  }
+};
+
+// Run this once after server startup
+checkFilePermissions();

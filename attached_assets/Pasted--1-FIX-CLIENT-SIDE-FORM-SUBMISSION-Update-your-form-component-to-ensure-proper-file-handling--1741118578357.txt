@@ -1,0 +1,269 @@
+// 1. FIX CLIENT-SIDE FORM SUBMISSION
+
+// Update your form component to ensure proper file handling
+// In the AdminSettings component:
+
+// Fix the file input field handling
+<FormField
+  control={form.control}
+  name="siteLogo"
+  render={({ field: { onChange, value, ...field } }) => (
+    <FormItem>
+      <FormLabel>Site Logo</FormLabel>
+      <FormControl>
+        <div className="flex items-center gap-4">
+          <Input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              // Ensure we handle the file properly
+              const file = e.target.files?.[0];
+              if (file) {
+                console.log("Selected logo file:", file.name);
+                onChange(file);
+              }
+            }}
+            {...field}
+          />
+          {brandingSettings?.logoPath && (
+            <img
+              src={brandingSettings.logoPath}
+              alt="Current logo"
+              className="h-10 w-10 object-contain"
+            />
+          )}
+        </div>
+      </FormControl>
+      <FormMessage />
+    </FormItem>
+  )}
+/>
+
+// 2. MAKE SURE THE MUTATION CORRECTLY HANDLES FORMDATA
+
+// Update the brandingMutation to properly handle multipart/form-data:
+const brandingMutation = useMutation({
+  mutationFn: async (data: BrandingFormData) => {
+    console.log('Submitting branding form with data:', data);
+    const formData = new FormData();
+
+    // Add text fields with proper validation
+    formData.append('siteTitle', data.siteTitle || '');
+    formData.append('tabText', data.tabText || '');
+
+    // Add files only if they exist and are File objects
+    if (data.siteLogo instanceof File) {
+      console.log('Adding site logo to form:', data.siteLogo.name);
+      formData.append('siteLogo', data.siteLogo);
+    }
+    
+    if (data.favicon instanceof File) {
+      console.log('Adding favicon to form:', data.favicon.name);
+      formData.append('favicon', data.favicon);
+    }
+
+    // Custom implementation of apiRequest to handle FormData properly
+    const res = await fetch("/api/admin/branding", {
+      method: "POST",
+      body: formData,
+      // Don't set Content-Type header - browser will set it with correct boundary
+      credentials: 'include' // Include cookies for authentication
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || "Failed to update branding");
+    }
+    
+    return res.json();
+  },
+  onSuccess: (data) => {
+    console.log('Branding update successful:', data);
+    toast({
+      title: "Success",
+      description: "Branding settings updated successfully",
+    });
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/branding"] });
+  },
+  onError: (error: Error) => {
+    console.error('Branding update failed:', error);
+    toast({
+      title: "Error",
+      description: error.message,
+      variant: "destructive",
+    });
+  },
+});
+
+// 3. SERVER-SIDE IMPROVEMENTS
+
+// Update the server-side upload handling:
+app.post("/api/admin/branding", requireAdmin, async (req, res) => {
+  try {
+    console.log('Received branding update request');
+    
+    // Check if express-fileupload middleware is properly configured
+    if (!req.files) {
+      console.warn("File upload middleware not configured properly");
+      // Continue anyway since text fields may still be updated
+    } else {
+      console.log('Files received:', Object.keys(req.files).join(', '));
+    }
+
+    const { siteTitle, tabText } = req.body;
+    
+    // Ensure the fields exist, with fallbacks
+    const safeTitle = siteTitle || "My Website";
+    const safeTabText = tabText || "My Website - Client Portal";
+    
+    // Ensure directories exist with proper permissions
+    const publicDir = './public';
+    const uploadsDir = './public/uploads';
+    
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true, mode: 0o755 });
+    }
+    
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true, mode: 0o755 });
+    }
+
+    // Get existing settings
+    const settingsPath = './public/branding-settings.json';
+    let existingSettings = {
+      siteTitle: "Default Title",
+      tabText: "Default Tab Text",
+      logoPath: null,
+      faviconPath: null
+    };
+
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const data = await fs.promises.readFile(settingsPath, 'utf8');
+        existingSettings = JSON.parse(data);
+      } catch (readError) {
+        console.error("Error reading existing settings:", readError);
+        // Continue with defaults
+      }
+    }
+
+    // Process files if available
+    let logoPath = existingSettings.logoPath;
+    let faviconPath = existingSettings.faviconPath;
+    
+    const files = req.files || {};
+    
+    try {
+      if (files.siteLogo) {
+        const siteLogo = files.siteLogo;
+        const filename = `logo-${Date.now()}${path.extname(siteLogo.name)}`;
+        const filePath = `${uploadsDir}/${filename}`;
+        
+        await siteLogo.mv(filePath);
+        console.log(`Logo saved to ${filePath}`);
+        
+        // Verify the file was actually created
+        if (fs.existsSync(filePath)) {
+          logoPath = `/uploads/${filename}`;
+          console.log("Logo path updated:", logoPath);
+        } else {
+          console.error("Logo file wasn't created");
+        }
+      }
+      
+      if (files.favicon) {
+        const favicon = files.favicon;
+        const filename = `favicon-${Date.now()}${path.extname(favicon.name)}`;
+        const filePath = `${uploadsDir}/${filename}`;
+        
+        await favicon.mv(filePath);
+        console.log(`Favicon saved to ${filePath}`);
+        
+        // Verify the file was actually created
+        if (fs.existsSync(filePath)) {
+          faviconPath = `/uploads/${filename}`;
+          console.log("Favicon path updated:", faviconPath);
+        } else {
+          console.error("Favicon file wasn't created");
+        }
+      }
+    } catch (fileError) {
+      console.error("Error processing files:", fileError);
+      // Continue with text updates
+    }
+
+    // Update settings
+    const settings = {
+      siteTitle: safeTitle,
+      tabText: safeTabText,
+      logoPath,
+      faviconPath
+    };
+
+    try {
+      // Write settings file with proper permissions
+      await fs.promises.writeFile(
+        settingsPath, 
+        JSON.stringify(settings, null, 2), 
+        { mode: 0o644 }
+      );
+      console.log("Settings file written successfully");
+    } catch (writeError) {
+      console.error("Error writing settings file:", writeError);
+      throw new Error("Could not save settings file");
+    }
+
+    res.json({
+      success: true,
+      message: "Branding settings updated successfully",
+      data: settings
+    });
+  } catch (error) {
+    console.error("Error updating branding:", error);
+    res.status(500).json({
+      error: "Failed to update branding settings",
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// 4. ENSURE EXPRESS-FILEUPLOAD MIDDLEWARE IS CONFIGURED
+
+// Add this near the top of your Express setup code to ensure file uploads are handled properly:
+import fileUpload from 'express-fileupload';
+
+// Initialize fileUpload middleware
+app.use(fileUpload({
+  createParentPath: true,
+  limits: { 
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  abortOnLimit: true,
+  responseOnLimit: "File size limit reached (5MB)"
+}));
+
+// 5. MAKE SURE YOUR API CLIENT CORRECTLY HANDLES FORMDATA
+// Update your apiRequest helper function if you're using one:
+
+export const apiRequest = async (method, url, data, options = {}) => {
+  const requestOptions = {
+    method,
+    headers: {
+      ...options.headers
+    },
+    credentials: 'include',
+  };
+
+  if (data) {
+    // Handle FormData specially - don't set Content-Type
+    if (data instanceof FormData) {
+      requestOptions.body = data;
+    } else {
+      // Regular JSON data
+      requestOptions.headers['Content-Type'] = 'application/json';
+      requestOptions.body = JSON.stringify(data);
+    }
+  }
+
+  return fetch(url, requestOptions);
+};

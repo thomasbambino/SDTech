@@ -805,7 +805,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add the GET endpoint for branding settings
   app.get("/api/admin/branding", requireAdmin, async (req, res) => {
     try {
-      // Store branding settings in a JSON file
       const settingsPath = './public/branding-settings.json';
       let settings = {
         siteTitle: "SD Tech Pros",
@@ -819,7 +818,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         settings = JSON.parse(data);
       }
 
-      console.log('Fetched branding settings:', settings);
       res.json(settings);
     } catch (error) {
       console.error("Error fetching branding settings:", error);
@@ -845,14 +843,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create directories if they don't exist
+      // Ensure directories exist with proper permissions
       const publicDir = './public';
       const uploadsDir = './public/uploads';
+      
       if (!fs.existsSync(publicDir)) {
-        fs.mkdirSync(publicDir, { recursive: true });
+        fs.mkdirSync(publicDir, { recursive: true, mode: 0o755 });
       }
       if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
+        fs.mkdirSync(uploadsDir, { recursive: true, mode: 0o755 });
       }
 
       // Handle file uploads
@@ -864,15 +863,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         siteLogo: siteLogo?.name,
         favicon: favicon?.name
       });
-
-      // Validate file types
-      if (siteLogo && !siteLogo.mimetype.startsWith('image/')) {
-        return res.status(400).json({ error: "Site logo must be an image file" });
-      }
-
-      if (favicon && !['image/x-icon', 'image/png'].includes(favicon.mimetype)) {
-        return res.status(400).json({ error: "Favicon must be an .ico or .png file" });
-      }
 
       // Get existing settings
       const settingsPath = './public/branding-settings.json';
@@ -888,19 +878,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         existingSettings = JSON.parse(data);
       }
 
-      // Move files to public directory if present
+      // Process new files
       let logoPath = existingSettings.logoPath;
       let faviconPath = existingSettings.faviconPath;
 
       if (siteLogo) {
+        if (!siteLogo.mimetype.startsWith('image/')) {
+          return res.status(400).json({ error: "Site logo must be an image file" });
+        }
         const filename = `logo-${Date.now()}${path.extname(siteLogo.name)}`;
-        await siteLogo.mv(`${uploadsDir}/${filename}`);
+        const filePath = path.join(uploadsDir, filename);
+        await siteLogo.mv(filePath);
         logoPath = `/uploads/${filename}`;
       }
 
       if (favicon) {
+        if (!['image/x-icon', 'image/png'].includes(favicon.mimetype)) {
+          return res.status(400).json({ error: "Favicon must be an .ico or .png file" });
+        }
         const filename = `favicon-${Date.now()}${path.extname(favicon.name)}`;
-        await favicon.mv(`${uploadsDir}/${filename}`);
+        const filePath = path.join(uploadsDir, filename);
+        await favicon.mv(filePath);
         faviconPath = `/uploads/${filename}`;
       }
 
@@ -912,9 +910,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         faviconPath
       };
 
-      console.log('Saving branding settings:', settings);
+      // Write settings file
+      await fs.promises.writeFile(
+        settingsPath,
+        JSON.stringify(settings, null, 2),
+        { mode: 0o644 }
+      );
 
-      await fs.promises.writeFile(settingsPath, JSON.stringify(settings, null, 2));
+      console.log('Successfully updated branding settings:', settings);
 
       res.json({
         success: true,
