@@ -1,10 +1,10 @@
 import { NavBar } from "@/components/nav-bar";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Mail, Phone, MapPin, Calendar, DollarSign, Key } from "lucide-react";
+import { Loader2, Mail, Phone, MapPin, Calendar, DollarSign } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EditClientDialog } from "@/components/edit-client-dialog";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
@@ -50,29 +50,9 @@ export default function ClientProfile() {
   const { user } = useAuth();
   const { toast } = useToast();
   const isAdmin = user?.role === 'admin';
+  const isOwnProfile = user?.role === 'customer' && user.freshbooksId === id;
 
-  const resetPasswordMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest(
-        "POST",
-        `/api/freshbooks/clients/${id}/reset-password`
-      );
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Password Reset Email Sent",
-        description: "A temporary password has been sent to the client's email.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const shouldCheckFreshbooks = isAdmin;
 
   const { data: client, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
     queryKey: ["/api/freshbooks/clients", id],
@@ -84,7 +64,8 @@ export default function ClientProfile() {
         throw new Error(errorData.error || `Error: ${response.status}`);
       }
       return response.json();
-    }
+    },
+    enabled: shouldCheckFreshbooks
   });
 
   const { data: projects, isLoading: isLoadingProjects, error: projectsError } = useQuery<Project[]>({
@@ -97,8 +78,46 @@ export default function ClientProfile() {
       }
       return response.json();
     },
-    enabled: !!client // Only run this query if client data is loaded
+    enabled: shouldCheckFreshbooks && !!client 
   });
+
+  if (isOwnProfile && (isLoadingClient || clientError)) {
+    return (
+      <div className="min-h-screen bg-background">
+        <NavBar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h2 className="text-2xl font-semibold">{user.username}</h2>
+                      <p className="text-sm text-muted-foreground">{user.companyName}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" />
+                      <span>{user.email}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="lg:col-span-2">
+              <h2 className="text-2xl font-semibold mb-4">Projects</h2>
+              <Alert>
+                <AlertDescription>
+                  Loading project information...
+                </AlertDescription>
+              </Alert>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoadingClient) {
     return (
@@ -176,17 +195,6 @@ export default function ClientProfile() {
                       {client.status}
                     </Badge>
                   </div>
-                  {isAdmin && (
-                    <Button
-                      className="w-full mt-4"
-                      variant="outline"
-                      onClick={() => resetPasswordMutation.mutate()}
-                      disabled={resetPasswordMutation.isPending}
-                    >
-                      <Key className="h-4 w-4 mr-2" />
-                      Reset Client Password
-                    </Button>
-                  )}
                 </div>
               </CardContent>
             </Card>
@@ -194,7 +202,7 @@ export default function ClientProfile() {
           <div className="lg:col-span-2">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-semibold">Projects</h2>
-              <CreateProjectDialog clientId={client.id} />
+              {isAdmin && <CreateProjectDialog clientId={id} />}
             </div>
             <div className="space-y-4">
               {isLoadingProjects ? (
@@ -210,7 +218,7 @@ export default function ClientProfile() {
               ) : !projects?.length ? (
                 <Alert>
                   <AlertDescription>
-                    No projects found. Create a new project using the button above.
+                    No projects found.
                   </AlertDescription>
                 </Alert>
               ) : (
@@ -225,7 +233,7 @@ export default function ClientProfile() {
                           </CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                          <EditProjectDialog project={project} />
+                          {isAdmin && <EditProjectDialog project={project} />}
                           <Badge variant={project.status === 'Active' ? 'default' : 'secondary'}>
                             {project.status}
                           </Badge>
@@ -253,16 +261,6 @@ export default function ClientProfile() {
                           <div className="flex items-center text-sm text-muted-foreground">
                             <DollarSign className="h-4 w-4 mr-2" />
                             Budget: ${Number(project.budget).toLocaleString()}
-                          </div>
-                        )}
-                        {project.services && project.services.length > 0 && (
-                          <div className="mt-4">
-                            <h4 className="text-sm font-medium mb-2">Services:</h4>
-                            <ul className="list-disc list-inside text-sm text-muted-foreground">
-                              {project.services.map(service => (
-                                <li key={service.id}>{service.name}</li>
-                              ))}
-                            </ul>
                           </div>
                         )}
                       </div>
