@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { NavBar } from "@/components/nav-bar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,13 +7,12 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Check, X, Upload } from "lucide-react";
 import { useLocation } from "wouter";
-import { useEffect } from "react";
-import { MailgunConfigDialog } from "@/components/mailgun-config-dialog";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { MailgunConfigDialog } from "@/components/mailgun-config-dialog";
 
 const brandingSchema = z.object({
   siteTitle: z.string().min(1, "Site title is required"),
@@ -31,7 +31,7 @@ export default function AdminSettings() {
     queryKey: ["/api/freshbooks/connection-status"],
   });
 
-  const { data: mailgunStatus, isLoading: isLoadingMailgun } = useQuery({
+  const { data: mailgunStatus, isLoadingMailgun } = useQuery({
     queryKey: ["/api/mailgun/status"],
   });
 
