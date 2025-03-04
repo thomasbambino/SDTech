@@ -349,6 +349,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Freshbooks Integration (Admin only)
+  app.get("/api/freshbooks/connection-status", requireAdmin, async (req, res) => {
+    try {
+      console.log("Checking Freshbooks session tokens");
+      const tokens = req.session.freshbooksTokens;
+
+      if (!tokens || !tokens.access_token) {
+        return res.json({ connected: false });
+      }
+
+      // Verify the connection by making a test API call
+      try {
+        const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!meResponse.ok) {
+          console.log("Failed to verify Freshbooks connection:", meResponse.status);
+          return res.json({ connected: false });
+        }
+
+        const meData = await meResponse.json();
+        const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+        if (!accountId) {
+          console.log("No account ID found in Freshbooks response");
+          return res.json({ connected: false });
+        }
+
+        console.log("Freshbooks connection verified successfully");
+        return res.json({ 
+          connected: true,
+          accountId
+        });
+      } catch (error) {
+        console.error("Error verifying Freshbooks connection:", error);
+        return res.json({ connected: false });
+      }
+    } catch (error) {
+      console.error("Error checking Freshbooks connection status:", error);
+      res.status(500).json({
+        error: "Failed to check connection status",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/freshbooks/auth", requireAdmin, async (req, res) => {
     try {
       console.log("Starting Freshbooks auth URL generation");
