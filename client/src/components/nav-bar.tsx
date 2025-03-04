@@ -13,8 +13,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Laptop, Settings, Users } from "lucide-react";
+import { ChevronDown, Laptop, Settings, Users, LogOut } from "lucide-react";
 
 export function NavBar() {
   const { user, logoutMutation } = useAuth();
@@ -103,7 +104,7 @@ export function NavBar() {
         <div className="ml-auto flex items-center space-x-4">
           {user ? (
             <>
-              {isAdmin && (
+              {isAdmin ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="flex items-center gap-2">
@@ -124,16 +125,26 @@ export function NavBar() {
                         <span>User Management</span>
                       </Link>
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => logoutMutation.mutate()}
+                      disabled={logoutMutation.isPending}
+                      className="flex items-center text-red-600 focus:text-red-600"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Logout</span>
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => logoutMutation.mutate()}
+                  disabled={logoutMutation.isPending}
+                >
+                  Logout
+                </Button>
               )}
-              <Button
-                variant="outline"
-                onClick={() => logoutMutation.mutate()}
-                disabled={logoutMutation.isPending}
-              >
-                Logout
-              </Button>
             </>
           ) : (
             <Button asChild>
