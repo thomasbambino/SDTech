@@ -1,15 +1,17 @@
 import { NavBar } from "@/components/nav-bar";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Mail, Phone, MapPin, Calendar, DollarSign } from "lucide-react";
+import { Loader2, Mail, Phone, MapPin, Calendar, DollarSign, Key } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EditClientDialog } from "@/components/edit-client-dialog";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { EditProjectDialog } from "@/components/edit-project-dialog";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface Project {
   id: string;
@@ -41,8 +43,33 @@ interface FreshbooksClient {
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { toast } = useToast();
   const isAdmin = user?.role === 'admin';
   const isOwnProfile = user?.role === 'customer' && user.freshbooksId === id;
+
+  // Password reset mutation for admin
+  const resetPasswordMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/freshbooks/clients/${id}/reset-password`
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password Reset Email Sent",
+        description: "A temporary password has been sent to the client's email.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   // For admin users, fetch data from Freshbooks
   const { data: clientData, isLoading: isLoadingClient, error: clientError } = useQuery<FreshbooksClient>({
@@ -61,7 +88,7 @@ export default function ClientProfile() {
   // For customer users, use their own data
   const client = isOwnProfile ? {
     id: user.freshbooksId!,
-    name: user.username,
+    name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
     organization: user.companyName || '',
     email: user.email,
     phone: user.phoneNumber || '',
@@ -70,11 +97,17 @@ export default function ClientProfile() {
     createdDate: new Date(user.createdAt || '').toLocaleString()
   } : clientData;
 
+  // Projects query based on user role
   const { data: projects, isLoading: isLoadingProjects, error: projectsError } = useQuery<Project[]>({
     queryKey: ["/api/freshbooks/clients", id, "projects"],
     enabled: !!client,
     queryFn: async () => {
-      const response = await fetch(`/api/freshbooks/clients/${id}/projects`);
+      // Use different endpoints based on user role
+      const endpoint = isAdmin 
+        ? `/api/freshbooks/clients/${id}/projects`
+        : `/api/projects?clientId=${id}`;
+
+      const response = await fetch(endpoint);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || `Error: ${response.status}`);
@@ -175,6 +208,17 @@ export default function ClientProfile() {
                       {client.status}
                     </Badge>
                   </div>
+                  {isAdmin && (
+                    <Button
+                      className="w-full mt-4"
+                      variant="outline"
+                      onClick={() => resetPasswordMutation.mutate()}
+                      disabled={resetPasswordMutation.isPending}
+                    >
+                      <Key className="h-4 w-4 mr-2" />
+                      Reset Client Password
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -854,10 +854,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/clients", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
-    // Get all users with role "customer"
+    // Get all users with role "customer" 
     const users = await storage.getUsersByRole("customer");
     res.json(users);
   });
+
+  // Add endpoint for customers to access their own projects
+  app.get("/api/projects", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    try {
+      const authenticatedUser = req.user as Express.User;
+      
+      // For customers, only return their own projects
+      if (authenticatedUser.role === 'customer' && authenticatedUser.freshbooksId) {
+        // Get the account ID from Freshbooks API
+        const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+          headers: {
+            'Authorization': `Bearer ${req.session.freshbooksTokens?.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!meResponse.ok) {
+          throw new Error(`Failed to get user details: ${meResponse.status}`);
+        }
+
+        const meData = await meResponse.json();
+        const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+        if (!accountId) {
+          throw new Error("No account ID found in user profile");
+        }
+
+        const response = await fetch(
+          `https://api.freshbooks.com/accounting/account/${accountId}/users/clients/${authenticatedUser.freshbooksId}/projects`,
+          {
+            headers: {
+              'Authorization': `Bearer ${req.session.freshbooksTokens?.access_token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch projects: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const formattedProjects = data.response.result.projects.map(project => ({
+          id: project.id.toString(),
+          title: project.title,
+          description: project.description,
+          status: project.active ? 'Active' : 'Inactive',
+          dueDate: project.due_date,
+          budget: project.budget,
+          fixedPrice: project.fixed_price,
+          createdAt: project.created_at,
+          clientId: project.client_id.toString(),
+          billingMethod: project.billing_method,
+          projectType: project.project_type,
+          billedAmount: project.billed_amount,
+          billedStatus: project.billed_status
+        }));
+
+        return res.json(formattedProjects);
+      }
+
+      // For other roles or cases where freshbooksId is not available
+      return res.status(403).json({ 
+        error: "Access denied. Insufficient permissions or missing client ID." 
+      });
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({
+        error: "Failed to fetch projects",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+
 
   // Handle password reset for existing clients
   app.post("/api/freshbooks/clients/:id/reset-password", requireAdmin, async (req, res) => {
@@ -990,35 +1067,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this new endpoint for project access based on user role
-  app.get("/api/projects", async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
 
-    try {
-      const authenticatedUser = req.user as Express.User;
-      
-      // If admin, return all projects
-      if (authenticatedUser.role === 'admin') {
-        const projects = await storage.getAllProjects();
-        return res.json(projects);
-      }
-
-      // For customers, only return their own projects
-      if (authenticatedUser.role === 'customer') {
-        const projects = await storage.getProjects(authenticatedUser.id);
-        return res.json(projects);
-      }
-
-      // For pending users or other roles
-      return res.status(403).json({ error: "Access denied. Insufficient permissions." });
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-      res.status(500).json({
-        error: "Failed to fetch projects",
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
 
   // Add this new endpoint before the other project-related routes
   app.get("/api/freshbooks/projects", async (req, res) => {
