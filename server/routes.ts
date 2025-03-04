@@ -940,31 +940,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      const projectId = Number(req.params.projectId);  
+      const projectId = Number(req.params.projectId);
       const noteId = Number(req.params.noteId);
+
+      console.log('Delete note request:', {
+        rawProjectId: req.params.projectId,
+        parsedProjectId: projectId,
+        noteId,
+        userId: (req.user as Express.User).id,
+        userRole: (req.user as Express.User).role
+      });
 
       // First verify the note exists
       const note = await storage.getProjectNote(noteId);
       if (!note) {
+        console.log('Note not found:', noteId);
         return res.status(404).json({ error: "Note not found" });
       }
 
-      // Compare as numbers
-      if (Number(note.projectId) !== Number(projectId)) {
+      console.log('Note found:', {
+        noteId: note.id,
+        noteProjectId: note.projectId,
+        requestedProjectId: projectId,
+        noteProjectIdType: typeof note.projectId,
+        requestedProjectIdType: typeof projectId
+      });
+
+      // Ensure both IDs are numbers for comparison
+      const noteProjectId = Number(note.projectId);
+      if (noteProjectId !== projectId) {
         console.log('Project ID mismatch:', {
-          noteProjectId: note.projectId,
-          requestedProjectId: projectId
+          noteProjectId,
+          requestedProjectId: projectId,
+          noteId,
+          comparison: `${noteProjectId} !== ${projectId}`
         });
         return res.status(400).json({ error: "Note does not belong to this project" });
       }
 
       // Verify user has permission to delete the note
-      if (req.user.role !== 'admin' && note.createdBy !== req.user.id) {
+      const authenticatedUser = req.user as Express.User;
+      if (authenticatedUser.role !== 'admin' && note.createdBy !== authenticatedUser.id) {
         return res.status(403).json({ error: "You don't have permission to delete this note" });
       }
 
       // Delete the note
       await storage.deleteProjectNote(noteId);
+      console.log('Note deleted successfully:', noteId);
 
       res.json({ success: true });
     } catch (error) {
@@ -976,110 +998,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add project details endpoint after existing project routes
-  app.get("/api/projects/:id", async (req, res) => {
-    try {
-      const projectId = req.params.id;
-      console.log('Fetching project details for ID:', projectId);
 
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-
-      // First try to get project from local database
-      let project = await storage.getProjectByFreshbooksId(projectId);
-      
-      if (!project) {
-        // Try getting by local ID if not found by Freshbooks ID
-        project = await storage.getProject(Number(projectId));
-      }
-
-      // If not found in local DB and user is admin, try Freshbooks
-      if (!project && req.user?.role === 'admin') {
-        const tokens = req.session.freshbooksTokens;
-        if (tokens) {
-          try {
-            // Get the Freshbooks business ID
-            const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
-              headers: {
-                'Authorization': `Bearer ${tokens.access_token}`,
-                'Content-Type': 'application/json'
-              }
-            });
-
-            if (!meResponse.ok) {
-              throw new Error(`Failed to get user details: ${meResponse.status}`);
-            }
-
-            const meData = await meResponse.json();
-            const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
-
-            if (!accountId) {
-              throw new Error("No account ID found in user profile");
-            }
-
-            // Fetch project from Freshbooks
-            const projectResponse = await fetch(
-              `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
-              {
-                headers: {
-                  'Authorization': `Bearer ${tokens.access_token}`,
-                  'Content-Type': 'application/json'
-                }
-              }
-            );
-
-            if (!projectResponse.ok) {
-              if (projectResponse.status === 404) {
-                return res.status(404).json({ error: "Project not found" });
-              }
-              throw new Error(`Failed to fetch project from Freshbooks: ${projectResponse.status}`);
-            }
-
-            const projectData = await projectResponse.json();
-            const freshbooksProject = projectData.response.result.project;
-
-            project = {
-              id: Number(freshbooksProject.id),
-              title: freshbooksProject.title,
-              description: freshbooksProject.description || '',
-              status: freshbooksProject.complete ? 'Completed' : 'Active',
-              createdAt: new Date(freshbooksProject.created_at * 1000),
-              clientId: null,
-              freshbooksId: freshbooksProject.id.toString(),
-              progress: freshbooksProject.complete ? 100 : 0
-            };
-
-            // Store the Freshbooks project in our local database
-            await storage.createProject(project);
-          } catch (error) {
-            console.error('Error fetching from Freshbooks:', error);
-            throw error;
-          }
-        }
-      }
-
-      if (!project) {
-        return res.status(404).json({ error: "Project not found" });
-      }
-
-      // Verify user has access to this project
-      if (req.user.role !== 'admin') {
-        const projectClient = await storage.getUser(project.clientId!);
-        if (!projectClient || projectClient.id !== req.user.id) {
-          return res.status(403).json({ error: "Access denied" });
-        }
-      }
-
-      res.json(project);
-    } catch (error) {
-      console.error('Error fetching project:', error);
-      res.status(500).json({
-        error: "Failed to fetch project details",
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
 
   app.get("/api/freshbooks/clients/:id", async (req, res) => {
     try {

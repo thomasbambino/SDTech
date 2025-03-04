@@ -24,6 +24,10 @@ export function EditNoteDialog({ projectId, note }: EditNoteDialogProps) {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async () => {
+      console.log('Deleting note:', {
+        projectId: Number(projectId),
+        noteId: note.id
+      });
       await apiRequest("DELETE", `/api/projects/${projectId}/notes/${note.id}`);
     },
     onSuccess: () => {
