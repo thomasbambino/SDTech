@@ -4,10 +4,24 @@ import { Button } from "@/components/ui/button";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Check, X } from "lucide-react";
+import { Loader2, Check, X, Upload } from "lucide-react";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { MailgunConfigDialog } from "@/components/mailgun-config-dialog";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+
+const brandingSchema = z.object({
+  siteTitle: z.string().min(1, "Site title is required"),
+  tabText: z.string().min(1, "Tab text is required"),
+  siteLogo: z.instanceof(File).optional(),
+  favicon: z.instanceof(File).optional(),
+});
+
+type BrandingFormData = z.infer<typeof brandingSchema>;
 
 export default function AdminSettings() {
   const { toast } = useToast();
@@ -39,6 +53,42 @@ export default function AdminSettings() {
       });
     }
   }, [location, toast]);
+
+  const form = useForm<BrandingFormData>({
+    resolver: zodResolver(brandingSchema),
+    defaultValues: {
+      siteTitle: "SD Tech Pros",
+      tabText: "SD Tech Pros - Client Management",
+    }
+  });
+
+  const brandingMutation = useMutation({
+    mutationFn: async (data: BrandingFormData) => {
+      const formData = new FormData();
+      formData.append('siteTitle', data.siteTitle);
+      formData.append('tabText', data.tabText);
+      if (data.siteLogo) formData.append('siteLogo', data.siteLogo);
+      if (data.favicon) formData.append('favicon', data.favicon);
+
+      const res = await apiRequest("POST", "/api/admin/branding", formData);
+      if (!res.ok) throw new Error("Failed to update branding");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Branding settings updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/branding"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {
@@ -88,88 +138,211 @@ export default function AdminSettings() {
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Admin Settings</h1>
 
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Left Column - Branding */}
           <Card>
             <CardHeader>
-              <CardTitle>Freshbooks Integration</CardTitle>
+              <CardTitle>Branding</CardTitle>
               <CardDescription>
-                Connect your Freshbooks account to enable client management and invoicing features.
-                This connection will be used across all features of the application.
+                Customize your application's appearance with branding elements like logo, favicon, and titles.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span>Status:</span>
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : freshbooksStatus?.connected ? (
-                    <div className="flex items-center gap-2 text-green-500">
-                      <Check className="h-4 w-4" />
-                      <span>Connected</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-red-500">
-                      <X className="h-4 w-4" />
-                      <span>Not Connected</span>
-                    </div>
-                  )}
-                </div>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit((data) => brandingMutation.mutate(data))} className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="siteTitle"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Site Title</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter site title" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                {freshbooksStatus?.connected ? (
-                  <Button
-                    variant="destructive"
-                    onClick={() => disconnectMutation.mutate()}
-                    disabled={disconnectMutation.isPending}
+                  <FormField
+                    control={form.control}
+                    name="tabText"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Browser Tab Text</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter tab text" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="siteLogo"
+                    render={({ field: { onChange, value, ...field } }) => (
+                      <FormItem>
+                        <FormLabel>Site Logo</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-4">
+                            <Input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) onChange(file);
+                              }}
+                              {...field}
+                            />
+                            {value && (
+                              <img
+                                src={URL.createObjectURL(value)}
+                                alt="Logo preview"
+                                className="h-10 w-10 object-contain"
+                              />
+                            )}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="favicon"
+                    render={({ field: { onChange, value, ...field } }) => (
+                      <FormItem>
+                        <FormLabel>Favicon</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-4">
+                            <Input
+                              type="file"
+                              accept="image/x-icon,image/png"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) onChange(file);
+                              }}
+                              {...field}
+                            />
+                            {value && (
+                              <img
+                                src={URL.createObjectURL(value)}
+                                alt="Favicon preview"
+                                className="h-8 w-8 object-contain"
+                              />
+                            )}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button 
+                    type="submit" 
+                    className="w-full"
+                    disabled={brandingMutation.isPending}
                   >
-                    {disconnectMutation.isPending ? (
+                    {brandingMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Disconnecting...
+                        Updating...
                       </>
                     ) : (
-                      'Disconnect'
+                      'Update Branding'
                     )}
                   </Button>
-                ) : (
-                  <Button onClick={connectToFreshbooks}>
-                    Connect to Freshbooks
-                  </Button>
-                )}
-              </div>
+                </form>
+              </Form>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Mailgun Integration</CardTitle>
-              <CardDescription>
-                Configure Mailgun settings for sending automated emails, notifications, and client communications.
-                This integration is essential for password resets and system notifications.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span>Status:</span>
-                  {isLoadingMailgun ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : mailgunStatus?.configured ? (
-                    <div className="flex items-center gap-2 text-green-500">
-                      <Check className="h-4 w-4" />
-                      <span>Configured</span>
-                    </div>
+          {/* Right Column - Integration Settings */}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Freshbooks Integration</CardTitle>
+                <CardDescription>
+                  Connect your Freshbooks account to enable client management and invoicing features.
+                  This connection will be used across all features of the application.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>Status:</span>
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : freshbooksStatus?.connected ? (
+                      <div className="flex items-center gap-2 text-green-500">
+                        <Check className="h-4 w-4" />
+                        <span>Connected</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-red-500">
+                        <X className="h-4 w-4" />
+                        <span>Not Connected</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {freshbooksStatus?.connected ? (
+                    <Button
+                      variant="destructive"
+                      onClick={() => disconnectMutation.mutate()}
+                      disabled={disconnectMutation.isPending}
+                    >
+                      {disconnectMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Disconnecting...
+                        </>
+                      ) : (
+                        'Disconnect'
+                      )}
+                    </Button>
                   ) : (
-                    <div className="flex items-center gap-2 text-red-500">
-                      <X className="h-4 w-4" />
-                      <span>Not Configured</span>
-                    </div>
+                    <Button onClick={connectToFreshbooks}>
+                      Connect to Freshbooks
+                    </Button>
                   )}
                 </div>
-                <MailgunConfigDialog configured={!!mailgunStatus?.configured} />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Mailgun Integration</CardTitle>
+                <CardDescription>
+                  Configure Mailgun settings for sending automated emails, notifications, and client communications.
+                  This integration is essential for password resets and system notifications.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>Status:</span>
+                    {isLoadingMailgun ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : mailgunStatus?.configured ? (
+                      <div className="flex items-center gap-2 text-green-500">
+                        <Check className="h-4 w-4" />
+                        <span>Configured</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-red-500">
+                        <X className="h-4 w-4" />
+                        <span>Not Configured</span>
+                      </div>
+                    )}
+                  </div>
+                  <MailgunConfigDialog configured={!!mailgunStatus?.configured} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

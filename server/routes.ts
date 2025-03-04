@@ -800,6 +800,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add after mailgun configuration endpoint
+  app.post("/api/admin/branding", requireAdmin, async (req, res) => {
+    try {
+      if (!req.files) {
+        return res.status(400).json({ error: "No files were uploaded" });
+      }
+
+      const { siteTitle, tabText } = req.body;
+      const siteLogo = req.files.siteLogo as UploadedFile;
+      const favicon = req.files.favicon as UploadedFile;
+
+      // Validate file types
+      if (siteLogo && !siteLogo.mimetype.startsWith('image/')) {
+        return res.status(400).json({ error: "Site logo must be an image file" });
+      }
+
+      if (favicon && !['image/x-icon', 'image/png'].includes(favicon.mimetype)) {
+        return res.status(400).json({ error: "Favicon must be an .ico or .png file" });
+      }
+
+      // Move files to public directory
+      if (siteLogo) {
+        await siteLogo.mv(`./public/uploads/${siteLogo.name}`);
+      }
+
+      if (favicon) {
+        await favicon.mv(`./public/uploads/${favicon.name}`);
+      }
+
+      // Update configuration
+      // TODO: Store these settings in the database
+      res.json({
+        success: true,
+        message: "Branding settings updated successfully",
+        data: {
+          siteTitle,
+          tabText,
+          logoPath: siteLogo ? `/uploads/${siteLogo.name}` : null,
+          faviconPath: favicon ? `/uploads/${favicon.name}` : null,
+        }
+      });
+    } catch (error) {
+      console.error("Error updating branding:", error);
+      res.status(500).json({
+        error: "Failed to update branding settings",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/freshbooks/clients/:id", async (req, res) => {
     try {
       console.log("Fetching client details for ID:", req.params.id);
