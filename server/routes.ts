@@ -940,16 +940,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      const projectId = Number(req.params.projectId);
+      const projectId = Number(req.params.projectId);  
       const noteId = Number(req.params.noteId);
 
-      // First verify the note exists and belongs to the project  
+      // First verify the note exists
       const note = await storage.getProjectNote(noteId);
       if (!note) {
         return res.status(404).json({ error: "Note not found" });
       }
 
-      if (note.projectId !== projectId) {
+      // Compare as numbers
+      if (Number(note.projectId) !== Number(projectId)) {
+        console.log('Project ID mismatch:', {
+          noteProjectId: note.projectId,
+          requestedProjectId: projectId
+        });
         return res.status(400).json({ error: "Note does not belong to this project" });
       }
 
@@ -965,7 +970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting project note:", error);
       res.status(500).json({
-        error: "Failed to delete note", 
+        error: "Failed to delete note",
         details: error instanceof Error ? error.message : String(error)
       });
     }
