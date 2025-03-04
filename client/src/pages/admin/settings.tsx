@@ -16,6 +16,10 @@ export default function AdminSettings() {
     queryKey: ["/api/freshbooks/connection-status"],
   });
 
+  const { data: mailgunStatus, isLoading: isLoadingMailgun } = useQuery({
+    queryKey: ["/api/mailgun/status"],
+  });
+
   // Show toast based on URL parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -147,7 +151,9 @@ export default function AdminSettings() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span>Status:</span>
-                  {process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN ? (
+                  {isLoadingMailgun ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : mailgunStatus?.configured ? (
                     <div className="flex items-center gap-2 text-green-500">
                       <Check className="h-4 w-4" />
                       <span>Configured</span>
@@ -160,7 +166,7 @@ export default function AdminSettings() {
                   )}
                 </div>
                 <Button
-                  variant={process.env.MAILGUN_API_KEY ? "destructive" : "default"}
+                  variant={mailgunStatus?.configured ? "destructive" : "default"}
                   onClick={() => {
                     // TODO: Implement Mailgun configuration modal
                     toast({
@@ -169,7 +175,7 @@ export default function AdminSettings() {
                     });
                   }}
                 >
-                  {process.env.MAILGUN_API_KEY ? 'Update Configuration' : 'Configure Mailgun'}
+                  {mailgunStatus?.configured ? 'Update Configuration' : 'Configure Mailgun'}
                 </Button>
               </div>
             </CardContent>

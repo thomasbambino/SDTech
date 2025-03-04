@@ -761,6 +761,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this endpoint near other admin/settings related routes
+  app.get("/api/mailgun/status", requireAdmin, async (req, res) => {
+    try {
+      const configured = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
+      res.json({ configured });
+    } catch (error) {
+      console.error("Error checking Mailgun status:", error);
+      res.status(500).json({
+        error: "Failed to check Mailgun status",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/freshbooks/clients/:id", async (req, res) => {
     try {
       console.log("Fetching client details for ID:", req.params.id);
