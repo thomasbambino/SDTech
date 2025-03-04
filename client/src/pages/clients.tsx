@@ -35,7 +35,8 @@ export default function ClientsPage() {
   const filteredClients = clients?.filter(client => {
     const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          client.organization.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         client.email.toLowerCase().includes(searchTerm.toLowerCase());
+                         client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         client.phone.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === "all" || client.status.toLowerCase() === statusFilter.toLowerCase();
 
@@ -62,9 +63,10 @@ export default function ClientsPage() {
                     <Label htmlFor="search">Search</Label>
                     <Input
                       id="search"
-                      placeholder="Search by name, organization, or email"
+                      placeholder="Search by name, organization, email, or phone"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
+                      title="Search clients by their name, organization, email address, or phone number"
                     />
                   </div>
                   <div className="space-y-2">
