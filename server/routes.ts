@@ -874,6 +874,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const authenticatedUser = req.user as Express.User;
       const clientId = req.query.clientId as string;
+
+      console.log("Projects request:", {
+        userRole: authenticatedUser.role,
+        clientId,
+        userFreshbooksId: authenticatedUser.freshbooksId
+      });
       
       // For customers, verify they're accessing their own projects
       if (authenticatedUser.role === 'customer') {
@@ -884,78 +890,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use admin token to fetch projects
       const adminToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
-      if (!adminToken) {
-        throw new Error("Admin token not configured");
-      }
+      console.log("Admin token status:", { hasToken: !!adminToken });
 
-      // Get account ID using admin token
-      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
-        headers: {
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
+      try {
+        // Get account ID using admin token
+        const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+          headers: {
+            'Authorization': `Bearer ${adminToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!meResponse.ok) {
+          console.error("Failed to get user details:", {
+            status: meResponse.status,
+            statusText: meResponse.statusText
+          });
+          throw new Error(`Failed to get account details: ${meResponse.status}`);
         }
-      });
 
-      if (!meResponse.ok) {
-        throw new Error(`Failed to get account details: ${meResponse.status}`);
-      }
+        const meData = await meResponse.json();
+        console.log("Freshbooks me response:", {
+          hasResponse: !!meData.response,
+          hasBusinessMemberships: !!meData.response?.business_memberships,
+          businessCount: meData.response?.business_memberships?.length
+        });
 
-      const meData = await meResponse.json();
-      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+        const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+        if (!accountId) {
+          throw new Error("No account ID found in admin profile");
+        }
 
-      if (!accountId) {
-        throw new Error("No account ID found in admin profile");
-      }
+        // Fetch projects based on user role and clientId
+        const projectsEndpoint = clientId
+          ? `https://api.freshbooks.com/accounting/account/${accountId}/users/clients/${clientId}/projects`
+          : `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects`;
 
-      let projectsResponse;
-      // For customers, fetch only their projects
-      if (clientId) {
-        projectsResponse = await fetch(
-          `https://api.freshbooks.com/accounting/account/${accountId}/users/clients/${clientId}/projects`,
-          {
-            headers: {
-              'Authorization': `Bearer ${adminToken}`,
-              'Content-Type': 'application/json'
-            }
+        console.log("Fetching projects from:", projectsEndpoint);
+
+        const projectsResponse = await fetch(projectsEndpoint, {
+          headers: {
+            'Authorization': `Bearer ${adminToken}`,
+            'Content-Type': 'application/json'
           }
-        );
-      } else {
-        // For admin, fetch all projects
-        projectsResponse = await fetch(
-          `https://api.freshbooks.com/accounting/account/${accountId}/projects`,
-          {
-            headers: {
-              'Authorization': `Bearer ${adminToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+        });
+
+        if (!projectsResponse.ok) {
+          console.error("Failed to fetch projects:", {
+            status: projectsResponse.status,
+            statusText: projectsResponse.statusText
+          });
+          throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
+        }
+
+        const data = await projectsResponse.json();
+        console.log("Projects response:", {
+          hasData: !!data,
+          projectCount: data.response?.result?.projects?.length || 0
+        });
+
+        const projects = data.response.result.projects;
+        const formattedProjects = projects.map(project => ({
+          id: project.id.toString(),
+          title: project.title,
+          description: project.description,
+          status: project.completed ? 'Completed' : project.active ? 'Active' : 'Inactive',
+          dueDate: project.due_date,
+          budget: project.budget,
+          fixedPrice: project.fixed_price,
+          createdAt: project.created_at,
+          clientId: project.client_id.toString(),
+          billingMethod: project.billing_method,
+          projectType: project.project_type,
+          billedAmount: project.billed_amount,
+          billedStatus: project.billed_status
+        }));
+
+        res.json(formattedProjects);
+      } catch (fetchError) {
+        console.error("Error fetching from Freshbooks:", fetchError);
+        throw fetchError;
       }
-
-      if (!projectsResponse.ok) {
-        throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
-      }
-
-      const data = await projectsResponse.json();
-      const projects = data.response.result.projects;
-      
-      const formattedProjects = projects.map(project => ({
-        id: project.id.toString(),
-        title: project.title,
-        description: project.description,
-        status: project.active ? 'Active' : 'Inactive',
-        dueDate: project.due_date,
-        budget: project.budget,
-        fixedPrice: project.fixed_price,
-        createdAt: project.created_at,
-        clientId: project.client_id.toString(),
-        billingMethod: project.billing_method,
-        projectType: project.project_type,
-        billedAmount: project.billed_amount,
-        billedStatus: project.billed_status
-      }));
-
-      return res.json(formattedProjects);
     } catch (error) {
       console.error("Error fetching projects:", error);
       res.status(500).json({
