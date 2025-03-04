@@ -4,7 +4,7 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { users, projects, invoices, documents, projectNotes } from "@shared/schema";
 import type { User, Project, Invoice, Document, InsertUser, InsertProject, InsertInvoice, InsertDocument, ProjectNote, InsertProjectNote } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
 
@@ -156,7 +156,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(projectNotes)
       .where(eq(projectNotes.projectId, projectId))
-      .orderBy(projectNotes.createdAt);
+      .orderBy(desc(projectNotes.createdAt)); // Changed to desc for newest first
   }
 
   async createProjectNote(note: InsertProjectNote): Promise<ProjectNote> {

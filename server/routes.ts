@@ -933,6 +933,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add project note deletion endpoint
+  app.delete("/api/projects/:projectId/notes/:noteId", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const projectId = Number(req.params.projectId);
+      const noteId = Number(req.params.noteId);
+
+      // Verify the project exists and user has access
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Only admin or the project's client can delete notes
+      if (req.user.role !== 'admin') {
+        if (!project.clientId || project.clientId !== req.user.id) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+
+      // Delete the note
+      await storage.deleteProjectNote(noteId);
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting project note:", error);
+      res.status(500).json({
+        error: "Failed to delete note",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Add project details endpoint after existing project routes
   app.get("/api/projects/:id", async (req, res) => {
     try {
