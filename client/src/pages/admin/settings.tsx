@@ -15,6 +15,15 @@ import { z } from "zod";
 import { MailgunConfigDialog } from "@/components/mailgun-config-dialog";
 import { BrandingSettings, brandingSchema } from "@shared/schema";
 
+// Update freshbooks and mailgun status types
+type FreshbooksStatus = {
+  connected: boolean;
+};
+
+type MailgunStatus = {
+  configured: boolean;
+};
+
 // Extend the schema to include file uploads
 const brandingFormSchema = brandingSchema.extend({
   siteLogo: z.instanceof(File).optional(),
@@ -27,11 +36,11 @@ export default function AdminSettings() {
   const { toast } = useToast();
   const [location] = useLocation();
 
-  const { data: freshbooksStatus, isLoading } = useQuery({
+  const { data: freshbooksStatus, isLoading } = useQuery<FreshbooksStatus>({
     queryKey: ["/api/freshbooks/connection-status"],
   });
 
-  const { data: mailgunStatus } = useQuery({
+  const { data: mailgunStatus } = useQuery<MailgunStatus>({
     queryKey: ["/api/mailgun/status"],
   });
 
