@@ -8,7 +8,13 @@ import {
   NavigationMenuList,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
-import { Laptop } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, Laptop, Settings, Users } from "lucide-react";
 
 export function NavBar() {
   const { user, logoutMutation } = useAuth();
@@ -57,23 +63,9 @@ export function NavBar() {
                       </Link>
                     </NavigationMenuItem>
                     <NavigationMenuItem>
-                      <Link href="/admin/users">
-                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                          User Management
-                        </NavigationMenuLink>
-                      </Link>
-                    </NavigationMenuItem>
-                    <NavigationMenuItem>
                       <Link href="/admin/inquiries">
                         <NavigationMenuLink className={navigationMenuTriggerStyle()}>
                           Inquiries
-                        </NavigationMenuLink>
-                      </Link>
-                    </NavigationMenuItem>
-                    <NavigationMenuItem>
-                      <Link href="/admin/settings">
-                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                          Settings
                         </NavigationMenuLink>
                       </Link>
                     </NavigationMenuItem>
@@ -108,15 +100,41 @@ export function NavBar() {
           </NavigationMenuList>
         </NavigationMenu>
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center space-x-4">
           {user ? (
-            <Button
-              variant="outline"
-              onClick={() => logoutMutation.mutate()}
-              disabled={logoutMutation.isPending}
-            >
-              Logout
-            </Button>
+            <>
+              {isAdmin && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="flex items-center gap-2">
+                      {user.username}
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/settings" className="flex items-center">
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Settings</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/users" className="flex items-center">
+                        <Users className="mr-2 h-4 w-4" />
+                        <span>User Management</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => logoutMutation.mutate()}
+                disabled={logoutMutation.isPending}
+              >
+                Logout
+              </Button>
+            </>
           ) : (
             <Button asChild>
               <Link href="/auth">Login</Link>
