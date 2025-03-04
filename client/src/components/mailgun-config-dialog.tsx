@@ -8,8 +8,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 
@@ -19,7 +17,16 @@ export function MailgunConfigDialog({ configured }: { configured: boolean }) {
 
   const handleUpdateConfig = async () => {
     try {
-      // We'll handle the secrets update through Replit's secure mechanism
+      // First, trigger the ask_secrets tool to get Mailgun credentials
+      const response = await fetch("/api/mailgun/ask-secrets", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get Mailgun secrets"); // More specific error message
+      }
+
+      // If secrets were successfully set, update the configuration
       const result = await fetch("/api/mailgun/update-config", {
         method: "POST"
       });
@@ -30,7 +37,7 @@ export function MailgunConfigDialog({ configured }: { configured: boolean }) {
 
       setIsOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/mailgun/status"] });
-      
+
       toast({
         title: "Success",
         description: "Mailgun configuration updated successfully",

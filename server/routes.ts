@@ -778,7 +778,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add endpoint to update Mailgun configuration
   app.post("/api/mailgun/update-config", requireAdmin, async (req, res) => {
     try {
-      // Ask for Mailgun credentials securely  
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating Mailgun configuration:", error);
+      res.status(500).json({
+        error: "Failed to update Mailgun configuration", 
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Add endpoint to handle Mailgun secrets configuration
+  app.post("/api/mailgun/ask-secrets", requireAdmin, async (req, res) => {
+    try {
       await ask_secrets({
         secret_keys: ["MAILGUN_API_KEY", "MAILGUN_DOMAIN"],
         user_message: `
@@ -798,9 +810,9 @@ These credentials will be used for sending emails like password resets and notif
 
       res.json({ success: true });
     } catch (error) {
-      console.error("Error updating Mailgun configuration:", error);
+      console.error("Error configuring Mailgun secrets:", error);
       res.status(500).json({
-        error: "Failed to update Mailgun configuration", 
+        error: "Failed to configure Mailgun secrets",
         details: error instanceof Error ? error.message : String(error)
       });
     }
