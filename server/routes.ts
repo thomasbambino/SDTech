@@ -12,6 +12,7 @@ import passport from "passport";
 import type { User } from "@shared/schema";
 import type { UploadedFile } from "express-fileupload";
 import * as fs from "fs";
+import * as path from "path";
 
 const scryptAsync = promisify(scrypt);
 
@@ -818,6 +819,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         settings = JSON.parse(data);
       }
 
+      console.log('Fetched branding settings:', settings);
       res.json(settings);
     } catch (error) {
       console.error("Error fetching branding settings:", error);
@@ -831,12 +833,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update the POST endpoint to store settings
   app.post("/api/admin/branding", requireAdmin, async (req, res) => {
     try {
+      console.log('Received branding update request:', {
+        body: req.body,
+        files: req.files ? Object.keys(req.files) : 'no files'
+      });
+
       const { siteTitle, tabText } = req.body;
+      if (!siteTitle || !tabText) {
+        return res.status(400).json({
+          error: "Site title and tab text are required"
+        });
+      }
+
       const files = req.files || {};
+
+      // Create uploads directory if it doesn't exist
+      const uploadsDir = './public/uploads';
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
 
       // Optional file handling
       const siteLogo = files.siteLogo as UploadedFile | undefined;
       const favicon = files.favicon as UploadedFile | undefined;
+
+      console.log('Processing uploaded files:', {
+        siteLogo: siteLogo?.name,
+        favicon: favicon?.name
+      });
 
       // Validate file types if present
       if (siteLogo && !siteLogo.mimetype.startsWith('image/')) {
@@ -847,39 +871,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Favicon must be an .ico or .png file" });
       }
 
-      // Create uploads directory if it doesn't exist
-      const uploadsDir = './public/uploads';
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
+      // Get existing settings if they exist
+      const settingsPath = './public/branding-settings.json';
+      let existingSettings = {
+        siteTitle: "SD Tech Pros",
+        tabText: "SD Tech Pros - Client Management",
+        logoPath: null,
+        faviconPath: null
+      };
+
+      if (fs.existsSync(settingsPath)) {
+        const data = await fs.promises.readFile(settingsPath, 'utf8');
+        existingSettings = JSON.parse(data);
       }
 
       // Move files to public directory if present
-      let logoPath = null;
-      let faviconPath = null;
+      let logoPath = existingSettings.logoPath;
+      let faviconPath = existingSettings.faviconPath;
 
       if (siteLogo) {
-        await siteLogo.mv(`${uploadsDir}/${siteLogo.name}`);
-        logoPath = `/uploads/${siteLogo.name}`;
+        const filename = `logo-${Date.now()}${path.extname(siteLogo.name)}`;
+        await siteLogo.mv(`${uploadsDir}/${filename}`);
+        logoPath = `/uploads/${filename}`;
       }
 
       if (favicon) {
-        await favicon.mv(`${uploadsDir}/${favicon.name}`);
-        faviconPath = `/uploads/${favicon.name}`;
+        const filename = `favicon-${Date.now()}${path.extname(favicon.name)}`;
+        await favicon.mv(`${uploadsDir}/${filename}`);
+        faviconPath = `/uploads/${filename}`;
       }
 
-      // Store settings in a JSON file
+      // Update settings
       const settings = {
         siteTitle,
         tabText,
-        logoPath: logoPath || (fs.existsSync('./public/branding-settings.json') ? 
-          JSON.parse(await fs.promises.readFile('./public/branding-settings.json', 'utf8')).logoPath : 
-          null),
-        faviconPath: faviconPath || (fs.existsSync('./public/branding-settings.json') ? 
-          JSON.parse(await fs.promises.readFile('./public/branding-settings.json', 'utf8')).faviconPath : 
-          null)
+        logoPath,
+        faviconPath
       };
 
-      await fs.promises.writeFile('./public/branding-settings.json', JSON.stringify(settings, null, 2));
+      console.log('Saving branding settings:', settings);
+      await fs.promises.writeFile(settingsPath, JSON.stringify(settings, null, 2));
 
       res.json({
         success: true,

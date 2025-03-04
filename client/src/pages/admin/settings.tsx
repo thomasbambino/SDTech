@@ -35,8 +35,72 @@ export default function AdminSettings() {
     queryKey: ["/api/mailgun/status"],
   });
 
-  const { data: brandingSettings } = useQuery({
+  const { data: brandingSettings, isLoading: isLoadingBranding } = useQuery({
     queryKey: ["/api/admin/branding"],
+  });
+
+  const form = useForm<BrandingFormData>({
+    resolver: zodResolver(brandingSchema),
+    defaultValues: {
+      siteTitle: "",
+      tabText: "",
+    }
+  });
+
+  // Update form when branding settings are loaded
+  useEffect(() => {
+    if (brandingSettings) {
+      form.reset({
+        siteTitle: brandingSettings.siteTitle,
+        tabText: brandingSettings.tabText,
+      });
+
+      // Update page title and favicon
+      document.title = brandingSettings.tabText;
+
+      const existingFavicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+      if (brandingSettings.faviconPath) {
+        if (existingFavicon) {
+          existingFavicon.href = brandingSettings.faviconPath;
+        } else {
+          const favicon = document.createElement('link');
+          favicon.rel = 'icon';
+          favicon.href = brandingSettings.faviconPath;
+          document.head.appendChild(favicon);
+        }
+      }
+    }
+  }, [brandingSettings, form]);
+
+  const brandingMutation = useMutation({
+    mutationFn: async (data: BrandingFormData) => {
+      const formData = new FormData();
+      formData.append('siteTitle', data.siteTitle);
+      formData.append('tabText', data.tabText);
+      if (data.siteLogo) formData.append('siteLogo', data.siteLogo);
+      if (data.favicon) formData.append('favicon', data.favicon);
+
+      const res = await apiRequest("POST", "/api/admin/branding", formData);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to update branding");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: "Branding settings updated successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/branding"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Show toast based on URL parameters
@@ -58,105 +122,13 @@ export default function AdminSettings() {
     }
   }, [location, toast]);
 
-  useEffect(() => {
-    if (brandingSettings) {
-      form.reset(brandingSettings);
-
-      // Update page title and favicon
-      document.title = brandingSettings.tabText;
-      const existingFavicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-
-      if (brandingSettings.faviconPath) {
-        if (existingFavicon) {
-          existingFavicon.href = brandingSettings.faviconPath;
-        } else {
-          const favicon = document.createElement('link');
-          favicon.rel = 'icon';
-          favicon.href = brandingSettings.faviconPath;
-          document.head.appendChild(favicon);
-        }
-      }
-    }
-  }, [brandingSettings]);
-
-
-  const form = useForm<BrandingFormData>({
-    resolver: zodResolver(brandingSchema),
-    defaultValues: brandingSettings || {
-      siteTitle: "SD Tech Pros",
-      tabText: "SD Tech Pros - Client Management",
-    }
-  });
-
-  const brandingMutation = useMutation({
-    mutationFn: async (data: BrandingFormData) => {
-      const formData = new FormData();
-      formData.append('siteTitle', data.siteTitle);
-      formData.append('tabText', data.tabText);
-      if (data.siteLogo) formData.append('siteLogo', data.siteLogo);
-      if (data.favicon) formData.append('favicon', data.favicon);
-
-      const res = await apiRequest("POST", "/api/admin/branding", formData);
-      if (!res.ok) throw new Error("Failed to update branding");
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Branding settings updated successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/branding"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/freshbooks/disconnect");
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Failed to disconnect from Freshbooks");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/freshbooks/connection-status"] });
-      toast({
-        title: "Success",
-        description: "Disconnected from Freshbooks successfully",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const connectToFreshbooks = async () => {
-    try {
-      const res = await apiRequest("GET", "/api/freshbooks/auth");
-      if (!res.ok) {
-        throw new Error("Failed to get Freshbooks authentication URL");
-      }
-      const { authUrl } = await res.json();
-      window.location.href = authUrl;
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to connect to Freshbooks",
-        variant: "destructive",
-      });
-    }
-  };
+  if (isLoadingBranding) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -221,10 +193,10 @@ export default function AdminSettings() {
                               }}
                               {...field}
                             />
-                            {value && (
+                            {brandingSettings?.logoPath && (
                               <img
-                                src={URL.createObjectURL(value)}
-                                alt="Logo preview"
+                                src={brandingSettings.logoPath}
+                                alt="Current logo"
                                 className="h-10 w-10 object-contain"
                               />
                             )}
@@ -252,10 +224,10 @@ export default function AdminSettings() {
                               }}
                               {...field}
                             />
-                            {value && (
+                            {brandingSettings?.faviconPath && (
                               <img
-                                src={URL.createObjectURL(value)}
-                                alt="Favicon preview"
+                                src={brandingSettings.faviconPath}
+                                alt="Current favicon"
                                 className="h-8 w-8 object-contain"
                               />
                             )}
