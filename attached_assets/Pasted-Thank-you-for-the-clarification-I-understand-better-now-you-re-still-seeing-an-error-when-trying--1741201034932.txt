@@ -1,0 +1,198 @@
+Thank you for the clarification. I understand better now - you're still seeing an error when trying to access the Freshbooks API directly through your server.
+
+The fact that `/api/projects/12796597` works but `/api/freshbooks/clients/12796597/projects/12796597` gives a 500 error tells us that:
+
+1. Your local database lookup works fine
+2. The issue is specifically with the Freshbooks API integration
+
+Let's troubleshoot the Freshbooks integration specifically:
+
+## Step 1: Check if your admin token is valid
+
+Let's add a simple debug endpoint to test your Freshbooks admin token:
+
+```javascript
+app.get("/api/debug/freshbooks", async (req, res) => {
+  try {
+    const adminToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
+    
+    if (!adminToken) {
+      return res.json({
+        status: "error",
+        message: "No FRESHBOOKS_ADMIN_TOKEN set in environment"
+      });
+    }
+    
+    // Test with a basic Freshbooks API call
+    const response = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+      headers: {
+        'Authorization': `Bearer ${adminToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      return res.json({
+        status: "error",
+        message: `Freshbooks API test failed: ${response.status}`,
+        details: await response.text()
+      });
+    }
+    
+    const data = await response.json();
+    return res.json({
+      status: "success",
+      message: "Freshbooks token is valid",
+      data: data.response
+    });
+  } catch (error) {
+    return res.json({
+      status: "error",
+      message: "Exception testing Freshbooks token",
+      details: error.message
+    });
+  }
+});
+```
+
+Add this to your server code and access it at `/api/debug/freshbooks` to see if your token is valid.
+
+## Step 2: Add better error logging to the failing endpoint
+
+Let's modify the problematic endpoint to provide better error details:
+
+```javascript
+app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
+  try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { clientId, projectId } = req.params;
+    console.log('Fetching project details from Freshbooks:', { clientId, projectId });
+
+    // Get the token using the helper function
+    const accessToken = getFreshbooksToken(req);
+    if (!accessToken) {
+      console.error('No Freshbooks access token available');
+      return res.status(401).json({ 
+        error: "Freshbooks authentication required" 
+      });
+    }
+
+    // Get business account ID
+    console.log('Fetching user profile with token to get account ID');
+    const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!meResponse.ok) {
+      console.error('Failed to get account details:', {
+        status: meResponse.status,
+        statusText: meResponse.statusText,
+        text: await meResponse.text()
+      });
+      throw new Error(`Failed to get account details: ${meResponse.status}`);
+    }
+
+    const meData = await meResponse.json();
+    console.log('Received profile data:', {
+      hasResponse: !!meData.response,
+      hasBusinessMemberships: !!meData.response?.business_memberships,
+      membershipCount: meData.response?.business_memberships?.length || 0
+    });
+    
+    const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+    if (!accountId) {
+      console.error('No account ID found in profile response', meData);
+      throw new Error("No account ID found in profile");
+    }
+
+    console.log('Using account ID:', accountId);
+
+    // Fetch project from Freshbooks
+    console.log('Fetching project from Freshbooks API');
+    const fbResponse = await fetch(
+      `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      }
+    );
+
+    if (!fbResponse.ok) {
+      console.error('Failed to fetch from Freshbooks:', {
+        status: fbResponse.status,
+        statusText: fbResponse.statusText,
+        text: await fbResponse.text()
+      });
+      throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
+    }
+
+    const fbData = await fbResponse.json();
+    console.log('Freshbooks project response structure:', {
+      hasResponse: !!fbData.response,
+      hasResult: !!fbData.response?.result,
+      hasProject: !!fbData.response?.result?.project
+    });
+
+    if (!fbData.response?.result?.project) {
+      console.error('Project not found in Freshbooks response', fbData);
+      return res.status(404).json({ error: "Project not found in Freshbooks" });
+    }
+
+    const fbProject = fbData.response.result.project;
+    console.log('Found project in Freshbooks:', {
+      id: fbProject.id,
+      title: fbProject.title
+    });
+
+    // Format project data exactly like in client profile
+    const project = {
+      id: fbProject.id.toString(),
+      title: fbProject.title,
+      description: fbProject.description || '',
+      status: fbProject.complete ? 'Completed' : 'Active', 
+      createdAt: fbProject.created_at,
+      clientId: fbProject.client_id?.toString(),
+      budget: fbProject.budget,
+      fixedPrice: fbProject.fixed_price ? 'Yes' : 'No',
+      billingMethod: fbProject.billing_method
+    };
+
+    res.json(project);
+  } catch (error) {
+    console.error('Error fetching project from Freshbooks:', {
+      error,
+      message: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({
+      error: "Failed to fetch project details",
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+```
+
+This enhanced version will log each step of the process, making it easier to identify where exactly the failure is happening.
+
+## Step 3: Inspect server logs after making a request
+
+After adding these changes, try to access the endpoint again and check your server logs. The detailed logging will help pinpoint exactly where the issue is happening in the Freshbooks API call.
+
+## Meanwhile, use the working endpoint
+
+Since `/api/projects/12796597` is working from your local database, I'd recommend:
+
+1. Continue using that endpoint in your client code (as I provided in the fixed component)
+2. Add a more comprehensive solution for Freshbooks integration later once we identify the exact issue
+
+Let me know what the server logs show after adding the improved error logging, and we can diagnose the specific issue with your Freshbooks integration.

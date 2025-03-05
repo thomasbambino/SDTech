@@ -16,6 +16,34 @@ import * as path from "path";
 
 const scryptAsync = promisify(scrypt);
 
+// Add rate limiting helper at the top with other helpers
+const rateLimitStore = new Map();
+
+function checkRateLimit(key: string, limit: number = 2): boolean {
+  const now = Date.now();
+  const windowStart = now - 60000; // 1 minute window
+  
+  // Clean up old entries
+  rateLimitStore.forEach((timestamp, storedKey) => {
+    if (timestamp < windowStart) {
+      rateLimitStore.delete(storedKey);
+    }
+  });
+  
+  // Check if we've hit the limit
+  const requestCount = Array.from(rateLimitStore.entries())
+    .filter(([k, t]) => k.startsWith(key) && t >= windowStart)
+    .length;
+    
+  if (requestCount >= limit) {
+    return false;
+  }
+  
+  // Add new request timestamp
+  rateLimitStore.set(`${key}_${now}`, now);
+  return true;
+}
+
 // Middleware to ensure user is an admin
 function requireAdmin(req: any, res: any, next: any) {
   if (!req.isAuthenticated() || req.user.role !== 'admin') {
@@ -536,89 +564,174 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add the new project endpoint
-app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
+// Add debug endpoint for Freshbooks token testing
+app.get("/api/debug/freshbooks", async (req, res) => {
   try {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    const { clientId, projectId } = req.params;
-    console.log('Fetching project details from Freshbooks:', { clientId, projectId });
-
-    // Get the token using the helper function
-    const accessToken = getFreshbooksToken(req);
-    if (!accessToken) {
-      return res.status(401).json({ 
-        error: "Freshbooks authentication required" 
+    const adminToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
+    
+    if (!adminToken) {
+      return res.json({
+        status: "error",
+        message: "No FRESHBOOKS_ADMIN_TOKEN set in environment"
       });
     }
-
-    // Get business account ID
-    const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+    
+    // Test with a basic Freshbooks API call
+    const response = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${adminToken}`,
         'Content-Type': 'application/json'
       }
     });
-
-    if (!meResponse.ok) {
-      throw new Error(`Failed to get account details: ${meResponse.status}`);
+    
+    if (!response.ok) {
+      return res.json({
+        status: "error",
+        message: `Freshbooks API test failed: ${response.status}`,
+        details: await response.text()
+      });
     }
-
-    const meData = await meResponse.json();
-    const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
-
-    if (!accountId) {
-      throw new Error("No account ID found in profile");
-    }
-
-    // Fetch project from Freshbooks
-    const fbResponse = await fetch(
-      `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
-        }
-      }
-    );
-
-    if (!fbResponse.ok) {
-      throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
-    }
-
-    const fbData = await fbResponse.json();
-    console.log('Freshbooks response:', fbData);
-
-    if (!fbData.response?.result?.project) {
-      return res.status(404).json({ error: "Project not found in Freshbooks" });
-    }
-
-    const fbProject = fbData.response.result.project;
-
-    // Format project data
-    const project = {
-      id: fbProject.id.toString(),
-      title: fbProject.title,
-      description: fbProject.description || '',
-      status: fbProject.complete ? 'Completed' : 'Active',
-      createdAt: fbProject.created_at,
-      clientId: fbProject.client_id?.toString(),
-      budget: fbProject.budget,
-      fixedPrice: fbProject.fixed_price ? 'Yes' : 'No',
-      billingMethod: fbProject.billing_method
-    };
-
-    res.json(project);
+    
+    const data = await response.json();
+    return res.json({
+      status: "success",
+      message: "Freshbooks token is valid",
+      data: data.response
+    });
   } catch (error) {
-    console.error('Error fetching project:', error);
-    res.status(500).json({
-      error: "Failed to fetch project details",
-      details: error instanceof Error ? error.message : String(error)
+    return res.json({
+      status: "error",
+      message: "Exception testing Freshbooks token",
+      details: error.message
     });
   }
 });
+
+// Update the project details endpoint with better rate limit handling
+  app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const { clientId, projectId } = req.params;
+      console.log('Fetching project details from Freshbooks:', { clientId, projectId });
+
+      // Get the token using the helper function
+      const accessToken = getFreshbooksToken(req);
+      if (!accessToken) {
+        console.error('No Freshbooks access token available');
+        return res.status(401).json({ 
+          error: "Freshbooks authentication required" 
+        });
+      }
+
+      // Get business account ID with rate limit handling
+      console.log('Fetching user profile with token to get account ID');
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        if (meResponse.status === 429) {
+          const retryAfter = meResponse.headers.get('Retry-After');
+          console.error('Rate limited by Freshbooks:', {
+            status: meResponse.status,
+            retryAfter
+          });
+          return res.status(429).json({
+            error: "Too many requests to Freshbooks API",
+            retryAfter: retryAfter || '30'
+          });
+        }
+
+        console.error('Failed to get account details:', {
+          status: meResponse.status,
+          statusText: meResponse.statusText,
+          text: await meResponse.text()
+        });
+        throw new Error(`Failed to get account details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+      if (!accountId) {
+        console.error('No account ID found in profile response', meData);
+        throw new Error("No account ID found in profile");
+      }
+
+      // Fetch project from Freshbooks with rate limit handling
+      const fbResponse = await fetch(
+        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!fbResponse.ok) {
+        if (fbResponse.status === 429) {
+          const retryAfter = fbResponse.headers.get('Retry-After');
+          console.error('Rate limited by Freshbooks:', {
+            status: fbResponse.status,
+            retryAfter
+          });
+          return res.status(429).json({
+            error: "Too many requests to Freshbooks API",
+            retryAfter: retryAfter || '30'
+          });
+        }
+
+        console.error('Failed to fetch from Freshbooks:', {
+          status: fbResponse.status,
+          statusText: fbResponse.statusText,
+          text: await fbResponse.text()
+        });
+        throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
+      }
+
+      const fbData = await fbResponse.json();
+      
+      if (!fbData.response?.result?.project) {
+        console.error('Project not found in Freshbooks response', fbData);
+        return res.status(404).json({ error: "Project not found in Freshbooks" });
+      }
+
+      const fbProject = fbData.response.result.project;
+
+      // Format project data
+      const project = {
+        id: fbProject.id.toString(),
+        title: fbProject.title,
+        description: fbProject.description || '',
+        status: fbProject.complete ? 'Completed' : 'Active',
+        createdAt: fbProject.created_at,
+        clientId: fbProject.client_id?.toString(),
+        budget: fbProject.budget,
+        fixedPrice: fbProject.fixed_price ? 'Yes' : 'No',
+        billingMethod: fbProject.billing_method
+      };
+
+      res.json(project);
+    } catch (error) {
+      console.error('Error fetching project from Freshbooks:', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      res.status(500).json({
+        error: "Failed to fetch project details",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
 
 app.get("/api/freshbooks/clients", async (req, res) => {
     try {
