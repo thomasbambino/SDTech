@@ -839,140 +839,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add project details endpoint
   app.get("/api/projects/:id", async (req, res) => {
     try {
+      // Verify authentication
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      const projectId = req.params.id;
-      console.log('Fetching project details for ID:', projectId);
-
-      // For admin users, fetch directly from Freshbooks
       const authenticatedUser = req.user as Express.User;
-      if (authenticatedUser?.role === 'admin') {
-        try {
-          console.log('Admin user, fetching from Freshbooks');
-          const tokens = req.session.freshbooksTokens;
-          if (!tokens?.access_token) {
-            return res.status(401).json({ error: "Freshbooks authentication required" });
+      if (!authenticatedUser) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const projectId = req.params.id;
+      console.log('Fetching project details from Freshbooks for ID:', projectId);
+
+      // Get admin token - required for both admin and customer access
+      const adminToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
+      if (!adminToken) {
+        throw new Error("Admin token not configured");
+      }
+
+      // Get business account ID
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get account details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+      if (!accountId) {
+        throw new Error("No account ID found in profile");
+      }
+
+      // Fetch project directly from Freshbooks API
+      const fbResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${accountId}/projects/${projectId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${adminToken}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
           }
+        }
+      );
 
-          // Get business account ID
-          const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
-            headers: {
-              'Authorization': `Bearer ${tokens.access_token}`,
-              'Content-Type': 'application/json'
-            }
-          });
+      if (!fbResponse.ok) {
+        throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
+      }
 
-          if (!meResponse.ok) {
-            console.error('Failed to get Freshbooks user details:', 
-              { status: meResponse.status, text: await meResponse.text() });
-            throw new Error(`Failed to get account details: ${meResponse.status}`);
-          }
+      const fbData = await fbResponse.json();
+      console.log('Freshbooks response:', fbData);
 
-          const meData = await meResponse.json();
-          console.log('Freshbooks user data:', meData);
-          
-          const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
-          if (!accountId) {
-            throw new Error("No account ID found in profile");
-          }
+      if (!fbData.project) {
+        return res.status(404).json({ error: "Project not found in Freshbooks" });
+      }
 
-          // Use the correct v1 projects endpoint
-          const fbResponse = await fetch(
-            `https://api.freshbooks.com/projects/business/${accountId}/projects/${projectId}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${tokens.access_token}`,
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache'
-              }
-            }
-          );
+      // Get the project data from Freshbooks response
+      const fbProject = fbData.project as FreshbooksProject;
 
-          console.log('Freshbooks response status:', fbResponse.status);
+      // Format project data
+      const project = {
+        id: fbProject.id.toString(),
+        title: fbProject.title,
+        description: fbProject.description || '',
+        status: fbProject.completed ? 'Completed' : 'Active', 
+        progress: fbProject.completed ? 100 : 0,
+        createdAt: fbProject.created_at ? new Date(fbProject.created_at) : null,
+        clientId: fbProject.client_id.toString()
+      };
 
-          if (!fbResponse.ok) {
-            const errorText = await fbResponse.text();
-            console.error('Freshbooks API error:', {
-              status: fbResponse.status,
-              statusText: fbResponse.statusText,
-              response: errorText
-            });
-            throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
-          }
-
-          const fbData = await fbResponse.json();
-          console.log('Raw Freshbooks response:', fbData);
-
-          if (!fbData.project) {
-            return res.status(404).json({ error: "Project not found in Freshbooks" });
-          }
-
-          const fbProject = fbData.project;
-          console.log('Freshbooks project data:', fbProject);
-
-          // Get or create local project record
-          let localProject = await storage.getProjectByFreshbooksId(projectId);
-          
-          // Always update with latest Freshbooks data
-          const projectData = {
-            title: fbProject.title,
-            description: fbProject.description || '',
-            status: fbProject.completed ? 'Completed' : 'Active',
-            progress: fbProject.completed ? 100 : (localProject?.progress || 0),
-            freshbooksId: fbProject.id.toString()
-          };
-
-          console.log('Updating project with data:', projectData);
-
-          if (localProject) {
-            // Update existing record with latest Freshbooks data
-            localProject = await storage.updateProject(localProject.id, projectData);
-            console.log('Updated local project:', localProject);
-          } else {
-            // Create new record if it doesn't exist
-            localProject = await storage.createProject({
-              ...projectData,
-              clientId: null // Set proper client ID when available
-            });
-            console.log('Created new local project:', localProject);
-          }
-
-          // Return combined data, prioritizing Freshbooks data
-          const response = {
-            ...localProject,
-            ...projectData
-          };
-
-          console.log('Sending response:', response);
-          res.json(response);
-          return;
-
-        } catch (fbError) {
-          console.error('Error fetching from Freshbooks:', fbError);
-          // Only fall back to local data if we have it
-          const localProject = await storage.getProjectByFreshbooksId(projectId);
-          if (localProject) {
-            return res.json(localProject);
-          }
-          throw fbError;
+      // For non-admin users, verify they have access to this project
+      if (authenticatedUser.role !== 'admin') {
+        if (!project.clientId || authenticatedUser.freshbooksId !== project.clientId) {
+          return res.status(403).json({ error: "Access denied" });
         }
       }
 
-      // For non-admin users, only use local data
-      const localProject = await storage.getProject(Number(projectId));
-      if (!localProject) {
-        return res.status(404).json({ error: "Project not found" });
-      }
-
-      // Verify user has access to this project
-      if (!localProject.clientId || localProject.clientId !== authenticatedUser.id) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-
-      res.json(localProject);
-
+      res.json(project);
     } catch (error) {
       console.error('Error fetching project:', error);
       res.status(500).json({
@@ -982,6 +931,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+    // Setup all routes
   app.get("/api/mailgun/status", requireAdmin, async (req, res) => {
     try {
       const configured = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
