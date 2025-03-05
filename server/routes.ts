@@ -839,6 +839,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error("No account ID found in profile");
           }
 
+          console.log('Fetching project from Freshbooks:', {
+            accountId,
+            projectId
+          });
+
           // Fetch project from Freshbooks
           const fbResponse = await fetch(
             `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
@@ -850,7 +855,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           );
 
+          console.log('Freshbooks response status:', fbResponse.status);
+
           if (!fbResponse.ok) {
+            const errorText = await fbResponse.text();
+            console.error('Freshbooks API error:', {
+              status: fbResponse.status,
+              statusText: fbResponse.statusText,
+              response: errorText
+            });
             throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
           }
 
@@ -858,61 +871,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('Freshbooks response:', fbData);
 
           if (!fbData.response?.result?.project) {
-            return res.status(404).json({ error: "Project not found" });
+            return res.status(404).json({ error: "Project not found in Freshbooks" });
           }
 
           const fbProject = fbData.response.result.project;
 
-          // Get local project data just for our app-specific fields
-          const localProject = await storage.getProjectByFreshbooksId(projectId) ||
-                             await storage.getProject(Number(projectId));
+          // Get or create local project record for our app-specific data
+          let localProject = await storage.getProjectByFreshbooksId(projectId);
+          
+          if (!localProject) {
+            // Create minimal local record for our app-specific data
+            localProject = await storage.createProject({
+              title: fbProject.title,
+              description: fbProject.description || '',
+              status: fbProject.complete ? 'Completed' : 'Active',
+              progress: fbProject.complete ? 100 : 0,
+              clientId: null, // We'll update this later if needed
+              freshbooksId: fbProject.id.toString()
+            });
+          }
 
           // Combine Freshbooks data with our local data
           const project = {
-            id: localProject?.id || Number(fbProject.id),
+            id: localProject.id,
             title: fbProject.title,
             description: fbProject.description || '',
             status: fbProject.complete ? 'Completed' : 'Active',
-            progress: fbProject.complete ? 100 : (localProject?.progress || 0),
-            clientId: localProject?.clientId || null,
+            progress: fbProject.complete ? 100 : localProject.progress,
+            clientId: localProject.clientId,
             freshbooksId: fbProject.id.toString(),
-            createdAt: new Date(fbProject.created_at)
+            createdAt: fbProject.created_at ? new Date(fbProject.created_at) : null
           };
-
-          // If we don't have a local record yet, create one
-          if (!localProject) {
-            await storage.createProject({
-              title: project.title,
-              description: project.description,
-              status: project.status,
-              progress: project.progress,
-              clientId: project.clientId,
-              freshbooksId: project.freshbooksId
-            });
-          }
 
           res.json(project);
           return;
         } catch (fbError) {
           console.error('Error fetching from Freshbooks:', fbError);
-          // Fall through to try local data if Freshbooks fails
+          throw fbError; // Re-throw to return 500 error
         }
-      }
+      } else {
+        // For non-admin users, look up by local ID
+        const localProject = await storage.getProject(Number(projectId));
+        if (!localProject) {
+          return res.status(404).json({ error: "Project not found" });
+        }
 
-      // For non-admin users or if Freshbooks fails, use local data
-      const localProject = await storage.getProject(Number(projectId));
-      if (!localProject) {
-        return res.status(404).json({ error: "Project not found" });
-      }
-
-      // Verify user has access to this project
-      if (authenticatedUser?.role !== 'admin') {
+        // Verify user has access to this project
         if (!localProject.clientId || localProject.clientId !== authenticatedUser.id) {
           return res.status(403).json({ error: "Access denied" });
         }
-      }
 
-      res.json(localProject);
+        res.json(localProject);
+      }
     } catch (error) {
       console.error('Error fetching project:', error);
       res.status(500).json({
