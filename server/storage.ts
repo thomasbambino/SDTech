@@ -34,6 +34,7 @@ export interface IStorage {
   createProject(project: InsertProject): Promise<Project>;
   updateProjectProgress(id: number, progress: number): Promise<Project>;
   getProjectByFreshbooksId(freshbooksId: string): Promise<Project | undefined>;
+  updateProject(id: number, project: Partial<Project>): Promise<Project>;
 
   // Project Notes
   getProjectNote(id: number): Promise<ProjectNote | undefined>;
@@ -152,6 +153,18 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async updateProject(id: number, project: Partial<Project>): Promise<Project> {
+    const [updatedProject] = await db
+      .update(projects)
+      .set({
+        ...project,
+        updatedAt: new Date()
+      })
+      .where(eq(projects.id, id))
+      .returning();
+    return updatedProject;
+  }
+
   async getProjectNote(id: number): Promise<ProjectNote | undefined> {
     const results = await db
       .select()
@@ -165,7 +178,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(projectNotes)
       .where(eq(projectNotes.projectId, projectId))
-      .orderBy(desc(projectNotes.createdAt)); 
+      .orderBy(desc(projectNotes.createdAt));
   }
 
   async createProjectNote(note: InsertProjectNote): Promise<ProjectNote> {
