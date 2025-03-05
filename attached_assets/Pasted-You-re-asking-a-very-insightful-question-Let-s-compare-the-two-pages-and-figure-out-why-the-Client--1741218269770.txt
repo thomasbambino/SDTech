@@ -1,0 +1,103 @@
+You're asking a very insightful question. Let's compare the two pages and figure out why the Client Profile works with Freshbooks but the Project Details page doesn't, despite them containing similar information.
+
+## Comparing the Two Pages
+
+### Client Profile Page
+- Works with Freshbooks
+- Fetches client data from `/api/freshbooks/clients/${id}`
+- Fetches projects from `/api/freshbooks/clients/${id}/projects`
+
+### Project Details Page
+- Fails with Freshbooks
+- Trying to fetch from `/api/freshbooks/clients/${id}/projects/${id}`
+- Falls back to local database with `/api/projects/${id}`
+
+## The Key Difference
+
+Looking at your server code and the error message, here's what's happening:
+
+1. For clients, you're using these Freshbooks API endpoints:
+   ```
+   /api/freshbooks/com/accounting/account/${accountId}/users/clients
+   ```
+
+2. For projects, the failing endpoint is:
+   ```
+   /api/freshbooks/com/accounting/account/${accountId}/projects/projects/${projectId}
+   ```
+
+3. The error message indicates that while the clients endpoint works with your current permissions (`user:clients:read`, etc.), the projects endpoint specifically requires admin privileges (`admin:all` or `admin:all:legacy`).
+
+## The Mystery Solved
+
+**Different API endpoints have different permission requirements in Freshbooks.**
+
+This is very common in API platforms - some endpoints are considered more sensitive than others. In Freshbooks, it appears that:
+
+- Reading client information requires only `user:clients:read` permission
+- Reading detailed project information through the accounting API requires full admin privileges
+
+## The Solution
+
+The good news is, your logs mention you have `user:projects:read` permission, which suggests there should be a projects API endpoint that works with your current permission level. In fact, your error log shows this list of permissions:
+
+```
+['user:profile:read user:clients:read user:clients:write user:projects:read user:projects:write user:invoices:read']
+```
+
+Since you have `user:projects:read` and `user:projects:write`, you should be able to use the projects API instead of the accounting API:
+
+```
+https://api.freshbooks.com/projects/business/${businessId}/projects/${projectId}
+```
+
+This is a different base URL than what you're using for the accounting endpoints.
+
+## Implementation Plan
+
+1. **Keep using the client profile code as-is** - it's working fine
+
+2. **Update the project details server endpoint:**
+   ```javascript
+   app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
+     // ...existing code...
+     
+     // Get businessId instead of accountId
+     const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+     
+     if (!businessId) {
+       throw new Error("No business ID found in profile");
+     }
+     
+     // Use projects API instead of accounting API
+     const fbResponse = await fetch(
+       `https://api.freshbooks.com/projects/business/${businessId}/projects/${projectId}`,
+       {
+         headers: {
+           'Authorization': `Bearer ${accessToken}`,
+           'Content-Type': 'application/json'
+         }
+       }
+     );
+     
+     // ...rest of code...
+   });
+   ```
+
+3. **Update your ProjectDetails component to use this endpoint:**
+   ```typescript
+   const { data: project } = useQuery({
+     queryKey: ['/api/freshbooks/clients', clientId, 'projects', id],
+     queryFn: async () => {
+       const response = await fetch(`/api/freshbooks/clients/${clientId}/projects/${id}`, {
+         credentials: 'include'
+       });
+       if (!response.ok) {
+         throw new Error('Failed to fetch project details');
+       }
+       return response.json();
+     }
+   });
+   ```
+
+Does this explanation help clarify why one works and the other doesn't?

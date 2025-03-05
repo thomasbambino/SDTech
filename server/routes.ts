@@ -554,8 +554,8 @@ app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res
         });
       }
 
-      // Get business account ID
-      console.log('Fetching user profile with token to get account ID');
+      // Get business ID
+      console.log('Fetching user profile with token to get business ID');
       const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -579,24 +579,24 @@ app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res
         membershipCount: meData.response?.business_memberships?.length || 0
       });
       
-      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+      // Get businessId instead of accountId
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
 
-      if (!accountId) {
-        console.error('No account ID found in profile response', meData);
-        throw new Error("No account ID found in profile");
+      if (!businessId) {
+        console.error('No business ID found in profile response', meData);
+        throw new Error("No business ID found in profile");
       }
 
-      console.log('Using account ID:', accountId);
+      console.log('Using business ID:', businessId);
 
-      // Fetch project from Freshbooks
-      console.log('Fetching project from Freshbooks API');
+      // Use projects API instead of accounting API
+      console.log('Fetching project from Freshbooks Projects API');
       const fbResponse = await fetch(
-        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
+        `https://api.freshbooks.com/projects/business/${businessId}/projects/${projectId}`,
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
+            'Content-Type': 'application/json'
           }
         }
       );
@@ -612,17 +612,15 @@ app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res
 
       const fbData = await fbResponse.json();
       console.log('Freshbooks project response structure:', {
-        hasResponse: !!fbData.response,
-        hasResult: !!fbData.response?.result,
-        hasProject: !!fbData.response?.result?.project
+        hasProject: !!fbData.project
       });
 
-      if (!fbData.response?.result?.project) {
+      if (!fbData.project) {
         console.error('Project not found in Freshbooks response', fbData);
         return res.status(404).json({ error: "Project not found in Freshbooks" });
       }
 
-      const fbProject = fbData.response.result.project;
+      const fbProject = fbData.project;
       console.log('Found project in Freshbooks:', {
         id: fbProject.id,
         title: fbProject.title
@@ -633,7 +631,7 @@ app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res
         id: fbProject.id.toString(),
         title: fbProject.title,
         description: fbProject.description || '',
-        status: fbProject.complete ? 'Completed' : 'Active', 
+        status: fbProject.completed ? 'Completed' : 'Active', 
         createdAt: fbProject.created_at,
         clientId: fbProject.client_id?.toString(),
         budget: fbProject.budget,
@@ -653,7 +651,7 @@ app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res
         details: error instanceof Error ? error.message : String(error)
       });
     }
-  });
+});
 
 app.get("/api/freshbooks/clients", async (req, res) => {
     try {
