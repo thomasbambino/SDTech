@@ -1,22 +1,18 @@
-import express, { type Request, type Response, type Express } from "express";
+import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
-import { Router } from "express";
-import fs from "fs";
-import path from "path";
-
-/********************************************
- * Route Registration
- ********************************************/
 import { storage } from "./storage";
 import { insertProjectSchema, insertInvoiceSchema, insertDocumentSchema, insertInquirySchema } from "@shared/schema";
 import { freshbooksService } from "./services/freshbooks";
 import { emailService } from "./services/email";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
+// import { APIClient } from '@freshbooks/api';
 import passport from "passport";
 import type { User } from "@shared/schema";
 import type { UploadedFile } from "express-fileupload";
+import * as fs from "fs";
+import * as path from "path";
 
 const scryptAsync = promisify(scrypt);
 
@@ -154,20 +150,12 @@ interface FreshbooksProject {
   completed?: boolean;
 }
 
-export async function registerRoutes(app: express.Express): Promise<Server> {
-  // Create HTTP server instance that will be shared with Vite 
-  const server = createServer(app);
-  
-  // Setup initial auth and router
+export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   await createInitialAdminUser();
-  
-  // Use API router for all routes
-  const apiRouter = express.Router();
-  app.use('/api', apiRouter);
 
   // Update login route to include password status
-  apiRouter.post("/login", passport.authenticate("local"), async (req, res) => {
+  app.post("/api/login", passport.authenticate("local"), async (req, res) => {
     try {
       // Type assertion since we know req.user exists after authentication
       const authenticatedUser = req.user as Express.User;
@@ -190,7 +178,7 @@ export async function registerRoutes(app: express.Express): Promise<Server> {
   });
 
   // Customer Inquiry Form
-  apiRouter.post("/inquiries", async (req: Request, res: Response) => {
+  app.post("/api/inquiries", async (req, res) => {
     try {
       const inquiryData = insertInquirySchema.parse(req.body);
 
@@ -231,7 +219,7 @@ export async function registerRoutes(app: express.Express): Promise<Server> {
   });
 
   // Add endpoint for admins to get pending inquiries
-  apiRouter.get("/admin/inquiries", requireAdmin, async (req: Request, res: Response) => {
+  app.get("/api/admin/inquiries", requireAdmin, async (req, res) => {
     try {
       const pendingUsers = await storage.getUsersByRole("pending");
       res.json(pendingUsers);
@@ -245,7 +233,7 @@ export async function registerRoutes(app: express.Express): Promise<Server> {
   });
 
   // Update the project creation when approving inquiry
-  apiRouter.post("/admin/inquiries/:id/approve", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/admin/inquiries/:id/approve", requireAdmin, async (req, res) => {
     try {
       // Check if Freshbooks is connected
       if (!req.session.freshbooksTokens) {
@@ -349,12 +337,12 @@ export async function registerRoutes(app: express.Express): Promise<Server> {
   });
 
   // User Management (Admin only)
-  apiRouter.get("/users", requireAdmin, async (req: Request, res: Response) => {
+  app.get("/api/users", requireAdmin, async (req, res) => {
     const users = await storage.getAllUsers();
     res.json(users);
   });
 
-  apiRouter.patch("/users/:id/role", requireAdmin, async (req: Request, res: Response) => {
+  app.patch("/api/users/:id/role", requireAdmin, async (req, res) => {
     const { role } = req.body;
     if (!['pending', 'customer', 'admin'].includes(role)) {
       return res.status(400).send("Invalid role");
@@ -368,7 +356,7 @@ export async function registerRoutes(app: express.Express): Promise<Server> {
     }
   });
 
-  apiRouter.post("/users/:id/reset-password", requireAdmin, async (req: Request, res: Response) => {
+  app.post("/api/users/:id/reset-password", requireAdmin, async (req, res) => {
     try {
       const tempPassword = generateTemporaryPassword();
       const hashedPassword = await storage.hashPassword(tempPassword);
@@ -396,7 +384,7 @@ export async function registerRoutes(app: express.Express): Promise<Server> {
   });
 
   // Password Change (for users with temporary password)
-  apiRouter.post("/change-password", async (req: Request, res: Response) => {
+  app.post("/api/change-password", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
     const { newPassword } = req.body;
@@ -414,61 +402,8 @@ export async function registerRoutes(app: express.Express): Promise<Server> {
     }
   });
 
-  // Add debug endpoint for testing Freshbooks admin token
-  apiRouter.get("/debug/freshbooks", async (req: Request, res: Response) => {
-    try {
-      console.log("Testing Freshbooks admin token...");
-      const adminToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
-      
-      if (!adminToken) {
-        console.log("No FRESHBOOKS_ADMIN_TOKEN found in environment");
-        return res.status(400).json({
-          status: "error",
-          message: "No FRESHBOOKS_ADMIN_TOKEN set in environment"
-        });
-      }
-      
-      // Test with a basic Freshbooks API call
-      console.log("Making test call to Freshbooks API...");
-      const response = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
-        headers: {
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Freshbooks API test failed:", {
-          status: response.status,
-          error: errorText
-        });
-        return res.status(response.status).json({
-          status: "error",
-          message: `Freshbooks API test failed: ${response.status}`,
-          details: errorText
-        });
-      }
-      
-      const data = await response.json();
-      console.log("Freshbooks API test successful:", data.response);
-      return res.json({
-        status: "success",
-        message: "Freshbooks token is valid",
-        data: data.response
-      });
-    } catch (error) {
-      console.error("Exception testing Freshbooks token:", error);
-      return res.status(500).json({
-        status: "error",
-        message: "Exception testing Freshbooks token",
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-
-  // Freshbooks Integration (Admin only)  
-  apiRouter.get("/api/freshbooks/connection-status", requireAdmin, async (req: Request, res: Response) => {
+  // Freshbooks Integration (Admin only)
+  app.get("/api/freshbooks/connection-status", requireAdmin, async (req, res) => {
     try {
       console.log("Checking Freshbooks session tokens:", {
         hasTokens: !!req.session.freshbooksTokens,
@@ -543,7 +478,7 @@ export async function registerRoutes(app: express.Express): Promise<Server> {
     }
   });
 
-  apiRouter.get("/api/freshbooks/auth", requireAdmin, async (req: Request, res: Response) => {
+  app.get("/api/freshbooks/auth", requireAdmin, async (req, res) => {
     try {
       console.log("Starting Freshbooks auth URL generation");
       const authUrl = await freshbooksService.getAuthUrl();
@@ -563,7 +498,7 @@ export async function registerRoutes(app: express.Express): Promise<Server> {
   });
 
   // Update the callback route to match Freshbooks configuration
-  apiRouter.get("/auth/callback", requireAdmin, async (req: Request, res: Response) => {
+  app.get("/auth/callback", requireAdmin, async (req, res) => {
     try {
       console.log("Received Freshbooks callback");
       const code = req.query.code as string;
@@ -1003,7 +938,7 @@ app.get("/api/freshbooks/clients", async (req, res) => {
   });
 
   // Add project details endpoint
-  apiRouter.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req: Request, res: Response) => {
+  app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Authentication required" });
