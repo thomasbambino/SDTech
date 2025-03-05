@@ -101,10 +101,10 @@ export default function ProjectDetails() {
   const isCustomer = user?.role === 'customer';
 
   // Fetch project details
-  const { 
-    data: project, 
-    isLoading: projectLoading, 
-    error: projectError 
+  const {
+    data: project,
+    isLoading: projectLoading,
+    error: projectError
   } = useQuery<FreshbooksProject>({
     queryKey: ["/api/freshbooks/clients", id, "projects", id],
     queryFn: async () => {
@@ -154,7 +154,7 @@ export default function ProjectDetails() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ["/api/projects", id, "notes"],
         refetchType: 'all'
       });
@@ -365,74 +365,6 @@ export default function ProjectDetails() {
           </CardContent>
         </Card>
 
-        {/* Project Details Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Project Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center">
-              <Calendar className="h-4 w-4 mr-2" />
-              <span>Created: {formatDate(project.createdAt?.toString())}</span>
-            </div>
-
-            {project.dueDate && (
-              <div className="flex items-center">
-                <Calendar className="h-4 w-4 mr-2" />
-                <span>Due: {formatDate(project.dueDate)}</span>
-              </div>
-            )}
-
-            {project.clientId && (
-              <div className="flex items-center">
-                <span className="mr-2">Client ID:</span>
-                <Badge variant="outline">{project.clientId}</Badge>
-              </div>
-            )}
-
-            {(project.budget || project.billedAmount) && (
-              <div className="flex items-center">
-                <DollarSign className="h-4 w-4 mr-2" />
-                <span>
-                  {project.budget ? `Budget: $${Number(project.budget).toLocaleString()}` : ''}
-                  {project.budget && project.billedAmount ? ' | ' : ''}
-                  {project.billedAmount ? `Billed: $${Number(project.billedAmount).toLocaleString()}` : ''}
-                </span>
-              </div>
-            )}
-
-            {project.billingMethod && (
-              <div className="flex items-center">
-                <span className="mr-2">Billing:</span>
-                <span>{project.billingMethod}</span>
-              </div>
-            )}
-
-            {project.projectType && (
-              <div className="flex items-center">
-                <span className="mr-2">Type:</span>
-                <span>{project.projectType}</span>
-              </div>
-            )}
-
-            {project.fixedPrice !== undefined && (
-              <div className="flex items-center">
-                <span className="mr-2">Fixed Price:</span>
-                <Badge variant={isFixedPrice ? "default" : "secondary"}>
-                  {isFixedPrice ? "Yes" : "No"}
-                </Badge>
-              </div>
-            )}
-
-            {project.billedStatus && (
-              <div className="flex items-center">
-                <span className="mr-2">Billing Status:</span>
-                <Badge>{project.billedStatus}</Badge>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Progress Section */}
         <Card className="mb-6">
           <CardHeader>
@@ -471,6 +403,89 @@ export default function ProjectDetails() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Project Details Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Calendar className="h-5 w-5 mr-2" />
+                Dates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="text-sm">
+                <span className="font-medium">Created:</span>{" "}
+                {formatDate(project.createdAt?.toString())}
+              </div>
+              {project.dueDate && (
+                <div className="text-sm">
+                  <span className="font-medium">Due:</span>{" "}
+                  {formatDate(project.dueDate)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <DollarSign className="h-5 w-5 mr-2" />
+                Financial Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {project.budget && (
+                <div className="text-sm">
+                  <span className="font-medium">Budget:</span>{" "}
+                  ${Number(project.budget).toLocaleString()}
+                </div>
+              )}
+              {project.billedAmount && (
+                <div className="text-sm">
+                  <span className="font-medium">Billed:</span>{" "}
+                  ${Number(project.billedAmount).toLocaleString()}
+                </div>
+              )}
+              {project.fixedPrice !== undefined && (
+                <div className="text-sm">
+                  <span className="font-medium">Fixed Price:</span>{" "}
+                  <Badge variant={isFixedPrice ? "default" : "secondary"}>
+                    {isFixedPrice ? "Yes" : "No"}
+                  </Badge>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                Project Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {project.billingMethod && (
+                <div className="text-sm">
+                  <span className="font-medium">Billing Method:</span>{" "}
+                  {project.billingMethod}
+                </div>
+              )}
+              {project.projectType && (
+                <div className="text-sm">
+                  <span className="font-medium">Type:</span>{" "}
+                  {project.projectType}
+                </div>
+              )}
+              {project.billedStatus && (
+                <div className="text-sm">
+                  <span className="font-medium">Status:</span>{" "}
+                  <Badge>{project.billedStatus}</Badge>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
