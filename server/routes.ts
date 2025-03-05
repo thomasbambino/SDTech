@@ -7,7 +7,7 @@ import { freshbooksService } from "./services/freshbooks";
 import { emailService } from "./services/email";
 import { scrypt, randomBytes } from "crypto";
 import { promisify } from "util";
-import { APIClient } from '@freshbooks/api';
+// import { APIClient } from '@freshbooks/api';
 import passport from "passport";
 import type { User } from "@shared/schema";
 import type { UploadedFile } from "express-fileupload";
@@ -300,7 +300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.updateUserRole(parseInt(req.params.id), role);
       res.json(user);
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -568,9 +568,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
 
             // Get client details from Freshbooks
-            const accountId = await freshbooksService.getBusinessId(tokens.access_token);
+            // Get business account ID
+            const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+              headers: {
+                'Authorization': `Bearer ${tokens.access_token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            if (!meResponse.ok) {
+              throw new Error(`Failed to get account details: ${meResponse.status}`);
+            }
+
+            const meData = await meResponse.json();
+            const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+            if (!accountId) {
+              throw new Error("No account ID found in user profile");
+            }
+
             const clientResponse = await fetch(
-              `${freshbooksService.baseUrl}/accounting/account/${accountId}/users/clients/${req.params.id}`,
+              `https://api.freshbooks.com/accounting/account/${accountId}/users/clients/${req.params.id}`,
               {
                 headers: {
                   'Authorization': `Bearer ${tokens.access_token}`,
@@ -651,7 +669,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const rawData = await clientsResponse.json();
-      const formattedClients = rawData.response.result.clients.map(client => ({
+      interface FreshbooksClient {
+        id: string | number;
+        fname: string;
+        lname: string;
+        organization: string;
+        email: string;
+        home_phone: string;
+        p_street?: string;
+        p_street2?: string;
+        p_city?: string;
+        p_province?: string;
+        p_code?: string;
+        p_country?: string;
+        vis_state: number;
+        signup_date?: string;
+        updated?: string;
+        created_at?: string;
+      }
+      
+      const formattedClients = rawData.response.result.clients.map((client: FreshbooksClient) => ({
         id: client.id.toString(),
         name: `${client.fname} ${client.lname}`.trim(),
         organization: client.organization || '',
@@ -959,9 +996,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Project not found" });
       }
 
+      console.log('Initial project data:', {
+        id: project.id,
+        title: project.title,
+        freshbooksId: project.freshbooksId
+      });
+
       // If admin, always fetch latest data from Freshbooks
       const authenticatedUser = req.user as Express.User;
-      if (authenticatedUser.role === 'admin' && project.freshbooksId) {
+      if (authenticatedUser?.role === 'admin' && project.freshbooksId) {
         try {
           console.log('Admin user, fetching latest data from Freshbooks');
           const tokens = req.session.freshbooksTokens;
@@ -997,37 +1040,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
 
             if (fbResponse.ok) {
+              interface FreshbooksProject {
+                id: string | number;
+                title: string;
+                description?: string;
+                complete: boolean;
+                active: boolean;
+                due_date?: string;
+                budget?: number;
+                fixed_price?: boolean;
+                created_at?: string;
+                client_id?: string;
+                billing_method?: string;
+                project_type?: string;
+                billed_amount?: number;
+                billed_status?: string;
+              }
+              
               const fbData = await fbResponse.json();
-              const fbProject = fbData.response.result.project;
+              const fbProject: FreshbooksProject = fbData.response.result.project;
 
-              // Update local project with latest Freshbooks data
+              console.log('Freshbooks project data:', {
+                id: fbProject.id,
+                title: fbProject.title,
+                complete: fbProject.complete
+              });
+
+              // Update local project with latest Freshbooks data 
               const updatedProject = {
-                ...project,
                 title: fbProject.title || project.title,
                 description: fbProject.description || project.description,
                 status: fbProject.complete ? 'Completed' : 'Active',
-                progress: fbProject.complete ? 100 : project.progress
+                progress: fbProject.complete ? 100 : project.progress,
+                clientId: project.clientId
               };
 
               // Update the project in the database
               project = await storage.updateProject(project.id, updatedProject);
-              console.log('Updated project with latest Freshbooks data:', project);
+              console.log('Updated project with latest Freshbooks data:', {
+                id: project.id,
+                title: project.title,
+                status: project.status
+              });
+            } else {
+              console.error('Failed to fetch from Freshbooks:', await fbResponse.text());
             }
           }
         } catch (fbError) {
           console.error('Error fetching from Freshbooks:', fbError);
-          // Continue with existing data if Freshbooks fails
         }
       }
 
       // Verify user has access to this project
-      if (authenticatedUser.role !== 'admin') {
+      if (authenticatedUser?.role !== 'admin') {
         if (!project.clientId || project.clientId !== authenticatedUser.id) {
-          console.log('Access denied:', {
-            userId: authenticatedUser.id,
-            userRole: authenticatedUser.role,
-            projectClientId: project.clientId
-          });
           return res.status(403).json({ error: "Access denied" });
         }
       }
@@ -1259,7 +1325,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const data = await response.json();
         console.log("Raw projects data:", data);
 
-        const formattedProjects = data.response.result.projects.map(project => ({
+        interface FormattedProject {
+          id: string;
+          title: string;
+          description?: string;
+          status: 'Active' | 'Inactive';
+          dueDate?: string;
+          budget?: number;
+          fixedPrice?: boolean;
+          createdAt?: string;
+          clientId: string;
+          billingMethod?: string;
+          projectType?: string;
+          billedAmount?: number;
+          billedStatus?: string;
+        }
+        
+        const formattedProjects = data.response.result.projects.map((project: FreshbooksProject): FormattedProject => ({
           id: project.id.toString(),
           title: project.title,
           description: project.description,

@@ -72,20 +72,22 @@ export default function ProjectDetails() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  // Fetch project details
-  const { data: project, isLoading } = useQuery<Project>({
+  // Fetch project details with shorter stale time
+  const { data: project, isLoading: projectLoading } = useQuery<Project>({
     queryKey: ["/api/projects", id],
     queryFn: async () => {
       console.log('Fetching project details for ID:', id);
       const response = await fetch(`/api/projects/${id}`, {
         credentials: 'include'
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to fetch project");
-      }
-      return response.json();
-    }
+      if (!response.ok) throw new Error("Failed to fetch project");
+      const data = await response.json();
+      console.log('Received project data:', data);
+      return data;
+    },
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true // Refetch when window regains focus
   });
 
   // Fetch project notes with shorter stale time
@@ -216,7 +218,7 @@ export default function ProjectDetails() {
     updateProgressMutation.mutate(progress);
   };
 
-  if (isLoading) {
+  if (projectLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
