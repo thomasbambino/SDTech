@@ -69,7 +69,6 @@ interface FreshbooksProject {
   progress?: number;
 }
 
-// Helper function to safely format dates
 const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Date not available';
   try {
@@ -80,7 +79,6 @@ const formatDate = (dateString: string | null | undefined): string => {
   }
 };
 
-// Helper function to get stage from progress
 const getStageFromProgress = (progress: number): ProjectStage => {
   const stages = Object.entries(PROJECT_STAGES);
   for (let i = stages.length - 1; i >= 0; i--) {
@@ -99,15 +97,16 @@ export default function ProjectDetails() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  // Fetch project details
+  // Fetch project details from Freshbooks
   const {
     data: project,
     isLoading: projectLoading,
     error: projectError
   } = useQuery<FreshbooksProject>({
-    queryKey: ["/api/projects", id],
+    queryKey: ["/api/freshbooks/clients", id, "projects", id],
     queryFn: async () => {
-      const response = await fetch(`/api/projects/${id}`, {
+      console.log('Fetching project details for ID:', id);
+      const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
         credentials: 'include'
       });
 
@@ -116,7 +115,9 @@ export default function ProjectDetails() {
         throw new Error(errorData.error || `Error: ${response.status}`);
       }
 
-      return response.json();
+      const data = await response.json();
+      console.log('Received project data:', data);
+      return data;
     }
   });
 
@@ -150,37 +151,6 @@ export default function ProjectDetails() {
       toast({
         title: "Error",
         description: "Failed to add note. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Update progress mutation
-  const updateProgressMutation = useMutation({
-    mutationFn: async (progress: number) => {
-      const response = await fetch(`/api/projects/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ progress })
-      });
-      if (!response.ok) throw new Error("Failed to update progress");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
-      toast({
-        title: "Success",
-        description: "Project progress updated",
-      });
-    },
-    onError: (error) => {
-      console.error("Error updating progress:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update progress. Please try again.",
         variant: "destructive",
       });
     },
@@ -234,6 +204,37 @@ export default function ProjectDetails() {
     updateProgressMutation.mutate(progress);
   };
 
+  // Update progress mutation
+  const updateProgressMutation = useMutation({
+    mutationFn: async (progress: number) => {
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ progress })
+      });
+      if (!response.ok) throw new Error("Failed to update progress");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
+      toast({
+        title: "Success",
+        description: "Project progress updated",
+      });
+    },
+    onError: (error) => {
+      console.error("Error updating progress:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update progress. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Fetch project notes
   const { data: notes, isLoading: notesLoading } = useQuery<ProjectNote[]>({
     queryKey: ["/api/projects", id, "notes"],
@@ -241,9 +242,7 @@ export default function ProjectDetails() {
       const response = await fetch(`/api/projects/${id}/notes`, {
         credentials: 'include'
       });
-      if (!response.ok) {
-        throw new Error("Failed to fetch notes");
-      }
+      if (!response.ok) throw new Error("Failed to fetch notes");
       return response.json();
     }
   });
@@ -328,7 +327,7 @@ export default function ProjectDetails() {
         </Card>
 
         {/* Project Details Card */}
-        <Card>
+        <Card className="mb-6">
           <CardHeader>
             <CardTitle>Project Details</CardTitle>
           </CardHeader>
