@@ -801,6 +801,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add this endpoint near other admin/settings related routes
+  // Add project details endpoint
+  app.get("/api/projects/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const projectId = req.params.id;
+      console.log('Fetching project details for ID:', projectId);
+
+      // First try to get project by Freshbooks ID
+      let project = await storage.getProjectByFreshbooksId(projectId);
+      
+      if (!project) {
+        // If not found by Freshbooks ID, try local numeric ID
+        const numericId = Number(projectId);
+        if (!isNaN(numericId)) {
+          project = await storage.getProject(numericId);
+        }
+      }
+
+      if (!project) {
+        console.log('Project not found:', projectId);
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // If admin and project has Freshbooks ID, always fetch latest data
+      const authenticatedUser = req.user as Express.User;
+      if (authenticatedUser?.role === 'admin' && project.freshbooksId) {
+        try {
+          console.log('Admin user, fetching latest data from Freshbooks');
+          const tokens = req.session.freshbooksTokens;
+          if (tokens?.access_token) {
+            const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+              headers: {
+                'Authorization': `Bearer ${tokens.access_token}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            if (!meResponse.ok) {
+              throw new Error(`Failed to get account details: ${meResponse.status}`);
+            }
+
+            const meData = await meResponse.json();
+            const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+            if (!accountId) {
+              throw new Error("No account ID found in profile");
+            }
+
+            // Fetch latest project data from Freshbooks
+            const fbResponse = await fetch(
+              `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${project.freshbooksId}`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${tokens.access_token}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            if (!fbResponse.ok) {
+              console.error('Failed to fetch from Freshbooks:', {
+                status: fbResponse.status,
+                statusText: fbResponse.statusText
+              });
+              throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
+            }
+
+            const fbData = await fbResponse.json();
+            console.log('Freshbooks API response:', fbData);
+
+            if (fbData.response?.result?.project) {
+              const fbProject = fbData.response.result.project;
+              console.log('Freshbooks project data:', {
+                id: fbProject.id,
+                title: fbProject.title,
+                description: fbProject.description,
+                complete: fbProject.complete
+              });
+
+              // Update local project with latest Freshbooks data
+              const updatedProject = {
+                ...project,
+                title: fbProject.title,
+                description: fbProject.description || project.description,
+                status: fbProject.complete ? 'Completed' : 'Active', 
+                progress: fbProject.complete ? 100 : project.progress
+              };
+
+              // Update the project in the database
+              project = await storage.updateProject(project.id, updatedProject);
+              console.log('Updated project with latest Freshbooks data:', {
+                id: project.id,
+                title: project.title,
+                status: project.status
+              });
+            }
+          }
+        } catch (fbError) {
+          console.error('Error fetching from Freshbooks:', fbError);
+          throw fbError;
+        }
+      }
+
+      // Verify user has access to this project
+      if (authenticatedUser?.role !== 'admin') {
+        if (!project.clientId || project.clientId !== authenticatedUser.id) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+
+      res.json(project);
+    } catch (error) {
+      console.error('Error fetching project:', error);
+      res.status(500).json({
+        error: "Failed to fetch project details",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   app.get("/api/mailgun/status", requireAdmin, async (req, res) => {
     try {
       const configured = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);

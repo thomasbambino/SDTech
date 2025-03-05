@@ -72,13 +72,17 @@ export default function ProjectDetails() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  // Fetch project details with shorter stale time
+  // Fetch project details with aggressive refetching
   const { data: project, isLoading: projectLoading } = useQuery<Project>({
     queryKey: ["/api/projects", id],
     queryFn: async () => {
       console.log('Fetching project details for ID:', id);
       const response = await fetch(`/api/projects/${id}`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
       });
       if (!response.ok) throw new Error("Failed to fetch project");
       const data = await response.json();
@@ -86,8 +90,10 @@ export default function ProjectDetails() {
       return data;
     },
     staleTime: 0, // Always fetch fresh data
+    cacheTime: 0, // Don't cache at all
     refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true // Refetch when window regains focus
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchInterval: 5000 // Refetch every 5 seconds
   });
 
   // Fetch project notes with shorter stale time
