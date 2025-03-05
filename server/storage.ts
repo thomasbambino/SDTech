@@ -142,10 +142,13 @@ export class DatabaseStorage implements IStorage {
 
   async getProjectByFreshbooksId(freshbooksId: string): Promise<Project | undefined> {
     try {
+      console.log("Looking up project by Freshbooks ID:", freshbooksId);
       const results = await db
         .select()
         .from(projects)
-        .where(eq(projects.freshbooksId, freshbooksId));
+        .where(eq(projects.freshbooksId, freshbooksId.toString()));
+
+      console.log("Query results:", results);
       return results[0];
     } catch (error) {
       console.error('Error in getProjectByFreshbooksId:', error);

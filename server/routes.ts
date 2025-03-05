@@ -813,12 +813,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // First try to get project by Freshbooks ID
       let project = await storage.getProjectByFreshbooksId(projectId);
+      console.log('Project lookup by Freshbooks ID result:', project);
       
       if (!project) {
         // If not found by Freshbooks ID, try local numeric ID
         const numericId = Number(projectId);
         if (!isNaN(numericId)) {
           project = await storage.getProject(numericId);
+          console.log('Project lookup by numeric ID result:', project);
         }
       }
 
@@ -834,6 +836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('Admin user, fetching latest data from Freshbooks');
           const tokens = req.session.freshbooksTokens;
           if (tokens?.access_token) {
+            // Get business account ID
             const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
               headers: {
                 'Authorization': `Bearer ${tokens.access_token}`,
@@ -884,26 +887,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
 
               // Update local project with latest Freshbooks data
-              const updatedProject = {
-                ...project,
+              const updatedProject = await storage.updateProject(project.id, {
                 title: fbProject.title,
                 description: fbProject.description || project.description,
-                status: fbProject.complete ? 'Completed' : 'Active', 
+                status: fbProject.complete ? 'Completed' : 'Active',
                 progress: fbProject.complete ? 100 : project.progress
-              };
-
-              // Update the project in the database
-              project = await storage.updateProject(project.id, updatedProject);
-              console.log('Updated project with latest Freshbooks data:', {
-                id: project.id,
-                title: project.title,
-                status: project.status
               });
+
+              console.log('Updated project:', {
+                id: updatedProject.id,
+                title: updatedProject.title,
+                status: updatedProject.status
+              });
+
+              project = updatedProject;
             }
           }
         } catch (fbError) {
           console.error('Error fetching from Freshbooks:', fbError);
-          throw fbError;
+          // Continue with existing data if Freshbooks fails
         }
       }
 
