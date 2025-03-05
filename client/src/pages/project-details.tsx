@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Calendar, DollarSign, AlertTriangle, Trash2 } from "lucide-react";
+import { Loader2, Calendar, DollarSign, AlertTriangle, Trash2, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -408,22 +408,27 @@ export default function ProjectDetails() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <Calendar className="h-5 w-5 mr-2" />
-                Dates
-              </CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle className="flex items-center">
+                  <Calendar className="h-5 w-5 mr-2" />
+                  Dates
+                </CardTitle>
+                {isAdmin && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="text-sm">
                 <span className="font-medium">Created:</span>{" "}
                 {formatDate(project.createdAt?.toString())}
               </div>
-              {project.dueDate && (
-                <div className="text-sm">
-                  <span className="font-medium">Due:</span>{" "}
-                  {formatDate(project.dueDate)}
-                </div>
-              )}
+              <div className="text-sm">
+                <span className="font-medium">Due:</span>{" "}
+                {project.dueDate ? formatDate(project.dueDate) : "Not set"}
+              </div>
             </CardContent>
           </Card>
 
