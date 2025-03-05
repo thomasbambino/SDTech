@@ -537,88 +537,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Add the new project endpoint
 app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
-  try {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
-    const { clientId, projectId } = req.params;
-    console.log('Fetching project details from Freshbooks:', { clientId, projectId });
-
-    // Get the token using the helper function
-    const accessToken = getFreshbooksToken(req);
-    if (!accessToken) {
-      return res.status(401).json({ 
-        error: "Freshbooks authentication required" 
-      });
-    }
-
-    // Get business account ID
-    const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Authentication required" });
       }
-    });
 
-    if (!meResponse.ok) {
-      throw new Error(`Failed to get account details: ${meResponse.status}`);
-    }
+      const { clientId, projectId } = req.params;
+      console.log('Fetching project details from Freshbooks:', { clientId, projectId });
 
-    const meData = await meResponse.json();
-    const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+      // Get the token using the helper function
+      const accessToken = getFreshbooksToken(req);
+      if (!accessToken) {
+        console.error('No Freshbooks access token available');
+        return res.status(401).json({ 
+          error: "Freshbooks authentication required" 
+        });
+      }
 
-    if (!accountId) {
-      throw new Error("No account ID found in profile");
-    }
-
-    // Fetch project from Freshbooks
-    const fbResponse = await fetch(
-      `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
-      {
+      // Get business account ID
+      console.log('Fetching user profile with token to get account ID');
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
+          'Content-Type': 'application/json'
         }
+      });
+
+      if (!meResponse.ok) {
+        console.error('Failed to get account details:', {
+          status: meResponse.status,
+          statusText: meResponse.statusText,
+          text: await meResponse.text()
+        });
+        throw new Error(`Failed to get account details: ${meResponse.status}`);
       }
-    );
 
-    if (!fbResponse.ok) {
-      throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
+      const meData = await meResponse.json();
+      console.log('Received profile data:', {
+        hasResponse: !!meData.response,
+        hasBusinessMemberships: !!meData.response?.business_memberships,
+        membershipCount: meData.response?.business_memberships?.length || 0
+      });
+      
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+
+      if (!accountId) {
+        console.error('No account ID found in profile response', meData);
+        throw new Error("No account ID found in profile");
+      }
+
+      console.log('Using account ID:', accountId);
+
+      // Fetch project from Freshbooks
+      console.log('Fetching project from Freshbooks API');
+      const fbResponse = await fetch(
+        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        }
+      );
+
+      if (!fbResponse.ok) {
+        console.error('Failed to fetch from Freshbooks:', {
+          status: fbResponse.status,
+          statusText: fbResponse.statusText,
+          text: await fbResponse.text()
+        });
+        throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
+      }
+
+      const fbData = await fbResponse.json();
+      console.log('Freshbooks project response structure:', {
+        hasResponse: !!fbData.response,
+        hasResult: !!fbData.response?.result,
+        hasProject: !!fbData.response?.result?.project
+      });
+
+      if (!fbData.response?.result?.project) {
+        console.error('Project not found in Freshbooks response', fbData);
+        return res.status(404).json({ error: "Project not found in Freshbooks" });
+      }
+
+      const fbProject = fbData.response.result.project;
+      console.log('Found project in Freshbooks:', {
+        id: fbProject.id,
+        title: fbProject.title
+      });
+
+      // Format project data exactly like in client profile
+      const project = {
+        id: fbProject.id.toString(),
+        title: fbProject.title,
+        description: fbProject.description || '',
+        status: fbProject.complete ? 'Completed' : 'Active', 
+        createdAt: fbProject.created_at,
+        clientId: fbProject.client_id?.toString(),
+        budget: fbProject.budget,
+        fixedPrice: fbProject.fixed_price ? 'Yes' : 'No',
+        billingMethod: fbProject.billing_method
+      };
+
+      res.json(project);
+    } catch (error) {
+      console.error('Error fetching project from Freshbooks:', {
+        error,
+        message: error.message,
+        stack: error.stack
+      });
+      res.status(500).json({
+        error: "Failed to fetch project details",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
-
-    const fbData = await fbResponse.json();
-    console.log('Freshbooks response:', fbData);
-
-    if (!fbData.response?.result?.project) {
-      return res.status(404).json({ error: "Project not found in Freshbooks" });
-    }
-
-    const fbProject = fbData.response.result.project;
-
-    // Format project data
-    const project = {
-      id: fbProject.id.toString(),
-      title: fbProject.title,
-      description: fbProject.description || '',
-      status: fbProject.complete ? 'Completed' : 'Active',
-      createdAt: fbProject.created_at,
-      clientId: fbProject.client_id?.toString(),
-      budget: fbProject.budget,
-      fixedPrice: fbProject.fixed_price ? 'Yes' : 'No',
-      billingMethod: fbProject.billing_method
-    };
-
-    res.json(project);
-  } catch (error) {
-    console.error('Error fetching project:', error);
-    res.status(500).json({
-      error: "Failed to fetch project details",
-      details: error instanceof Error ? error.message : String(error)
-    });
-  }
-});
+  });
 
 app.get("/api/freshbooks/clients", async (req, res) => {
     try {
@@ -937,90 +972,7 @@ app.get("/api/freshbooks/clients", async (req, res) => {
     }
   });
 
-  // Add project details endpoint
-  app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
 
-      const { clientId, projectId } = req.params;
-      console.log('Fetching project details from Freshbooks:', { clientId, projectId });
-
-      // Get the token using the helper function
-      const accessToken = getFreshbooksToken(req);
-      if (!accessToken) {
-        return res.status(401).json({ 
-          error: "Freshbooks authentication required" 
-        });
-      }
-
-      // Get business account ID
-      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!meResponse.ok) {
-        throw new Error(`Failed to get account details: ${meResponse.status}`);
-      }
-
-      const meData = await meResponse.json();
-      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
-
-      if (!accountId) {
-        throw new Error("No account ID found in profile");
-      }
-
-      // Fetch project from Freshbooks using the same endpoint as client profile
-      const fbResponse = await fetch(
-        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
-          }
-        }
-      );
-
-      if (!fbResponse.ok) {
-        throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
-      }
-
-      const fbData = await fbResponse.json();
-      console.log('Freshbooks response:', fbData);
-
-      if (!fbData.response?.result?.project) {
-        return res.status(404).json({ error: "Project not found in Freshbooks" });
-      }
-
-      const fbProject = fbData.response.result.project;
-
-      // Format project data exactly like in client profile
-      const project = {
-        id: fbProject.id.toString(),
-        title: fbProject.title,
-        description: fbProject.description || '',
-        status: fbProject.complete ? 'Completed' : 'Active', 
-        createdAt: fbProject.created_at,
-        clientId: fbProject.client_id?.toString(),
-        budget: fbProject.budget,
-        fixedPrice: fbProject.fixed_price ? 'Yes' : 'No',
-        billingMethod: fbProject.billing_method
-      };
-
-      res.json(project);
-    } catch (error) {
-      console.error('Error fetching project:', error);
-      res.status(500).json({
-        error: "Failed to fetch project details",
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
 
     // Setup all routes
   app.get("/api/mailgun/status", requireAdmin, async (req, res) => {
