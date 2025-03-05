@@ -98,6 +98,42 @@ const formatDate = (dateString: string | null | undefined, timezone: string = 'A
     }
 };
 
+interface FreshbooksClient {
+  id: number | string;
+  fname: string;
+  lname: string;
+  email: string;
+  home_phone?: string;
+  organization?: string;
+  p_street?: string;
+  p_street2?: string;
+  p_city?: string;
+  p_province?: string;
+  p_code?: string;
+  p_country?: string;
+  vis_state: number;
+  signup_date?: string;
+  updated?: string;
+  created_at?: string;
+}
+
+interface FreshbooksProject {
+  id: number | string;
+  title: string;
+  description?: string;
+  active: boolean;
+  due_date?: string;
+  budget?: number;
+  fixed_price?: boolean;
+  created_at?: string;
+  client_id: number | string;
+  billing_method?: string;
+  project_type?: string;
+  billed_amount?: number;
+  billed_status?: string;
+  completed?: boolean;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
   await createInitialAdminUser();
@@ -842,13 +878,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error("No account ID found in profile");
           }
 
-          // Use the v1 projects endpoint instead of accounting API
+          // Use the correct v1 projects endpoint
           const fbResponse = await fetch(
             `https://api.freshbooks.com/projects/business/${accountId}/projects/${projectId}`,
             {
               headers: {
                 'Authorization': `Bearer ${tokens.access_token}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache'
               }
             }
           );
@@ -873,35 +910,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           const fbProject = fbData.project;
+          console.log('Processing Freshbooks project:', fbProject);
 
-          // Get or create local project record for our app-specific data
+          // Get or create local project record
           let localProject = await storage.getProjectByFreshbooksId(projectId);
           
+          // Always update with latest Freshbooks data
           const projectData = {
-            id: localProject?.id,
             title: fbProject.title,
             description: fbProject.description || '',
             status: fbProject.completed ? 'Completed' : 'Active',
             progress: fbProject.completed ? 100 : (localProject?.progress || 0),
-            clientId: localProject?.clientId || null,
-            freshbooksId: fbProject.id.toString(),
-            createdAt: fbProject.created_at ? new Date(fbProject.created_at) : null
+            freshbooksId: fbProject.id.toString()
           };
 
-          // If we don't have a local record, create one
-          if (!localProject) {
+          if (localProject) {
+            // Update existing record
+            localProject = await storage.updateProject(localProject.id, projectData);
+            console.log('Updated local project:', localProject);
+          } else {
+            // Create new record
             localProject = await storage.createProject({
-              title: projectData.title,
-              description: projectData.description,
-              status: projectData.status,
-              progress: projectData.progress,
-              clientId: projectData.clientId,
-              freshbooksId: projectData.freshbooksId
+              ...projectData,
+              clientId: null // Set proper client ID when available
             });
-            projectData.id = localProject.id;
+            console.log('Created new local project:', localProject);
           }
 
-          res.json(projectData);
+          res.json({
+            ...localProject,
+            ...projectData // Ensure we return the latest Freshbooks data
+          });
           return;
         } catch (fbError) {
           console.error('Error fetching from Freshbooks:', fbError);
