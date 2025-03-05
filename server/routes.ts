@@ -938,25 +938,27 @@ app.get("/api/freshbooks/clients", async (req, res) => {
   });
 
   // Add project details endpoint
-  app.get("/api/projects/:id", async (req, res) => {
+  app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      const projectId = req.params.id;
-      console.log('Fetching project details from Freshbooks for ID:', projectId);
+      const { clientId, projectId } = req.params;
+      console.log('Fetching project details from Freshbooks:', { clientId, projectId });
 
-      // Get Freshbooks tokens from session
-      const tokens = req.session.freshbooksTokens;
-      if (!tokens?.access_token) {
-        return res.status(401).json({ error: "Freshbooks authentication required" });
+      // Get the token using the helper function
+      const accessToken = getFreshbooksToken(req);
+      if (!accessToken) {
+        return res.status(401).json({ 
+          error: "Freshbooks authentication required" 
+        });
       }
 
       // Get business account ID
       const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
         headers: {
-          'Authorization': `Bearer ${tokens.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -977,7 +979,7 @@ app.get("/api/freshbooks/clients", async (req, res) => {
         `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
         {
           headers: {
-            'Authorization': `Bearer ${tokens.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache'
           }

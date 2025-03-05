@@ -1,0 +1,113 @@
+Let's troubleshoot this "Failed to fetch project details" error. This is a common error message that typically appears when the server-side API call for fetching a project is encountering problems.
+
+Based on the error message, it seems the issue is occurring at the server level rather than in your React component. Here are the most likely causes and how to fix them:
+
+## Possible Causes & Solutions
+
+### 1. Missing or Invalid FRESHBOOKS_ADMIN_TOKEN
+
+**Check if:**
+- The `FRESHBOOKS_ADMIN_TOKEN` environment variable is set
+- The token is valid and not expired
+- The token has the correct permissions
+
+**Fix:**
+- Make sure the environment variable is correctly set in your server environment
+- If using a local `.env` file, verify the token is there and properly formatted
+- Try regenerating a new Freshbooks token if the current one might be expired
+
+### 2. Server Error in the Project API Endpoint
+
+**Check if:**
+- Your server logs show any errors when accessing the projects endpoint
+- There might be issues with the Freshbooks API itself
+
+**Fix:**
+- Check your server logs for specific error details
+- Add more detailed error logging in your `/api/projects/:id` endpoint:
+
+```javascript
+try {
+  // Your existing code...
+} catch (error) {
+  console.error('Detailed project fetch error:', {
+    error,
+    message: error.message,
+    stack: error.stack,
+    projectId: req.params.id
+  });
+  res.status(500).json({
+    error: "Failed to fetch project details",
+    details: error.message
+  });
+}
+```
+
+### 3. API Path or Authentication Issues
+
+**Check if:**
+- The Freshbooks API endpoints you're using are correct
+- Your server is properly handling authentication
+
+**Quick Tests:**
+
+1. Test if your server can make any Freshbooks API call with the admin token:
+
+```javascript
+// Add this temporary debug endpoint
+app.get("/api/freshbooks/test", async (req, res) => {
+  try {
+    const token = process.env.FRESHBOOKS_ADMIN_TOKEN;
+    if (!token) {
+      return res.status(500).json({ error: "No admin token configured" });
+    }
+    
+    const response = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Freshbooks API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    res.json({
+      success: true,
+      userData: data
+    });
+  } catch (error) {
+    console.error('Freshbooks test error:', error);
+    res.status(500).json({
+      error: "Freshbooks API test failed",
+      details: error.message
+    });
+  }
+});
+```
+
+2. Then test this endpoint in your browser or with a tool like Postman.
+
+### 4. Check for Missing Project ID or Invalid Format
+
+**Check if:**
+- The project ID in the URL is valid
+- The project actually exists in Freshbooks
+
+**Fix:**
+- Verify the project ID in the URL
+- Try looking up the project directly in Freshbooks to confirm it exists
+
+## Next Steps
+
+1. **Look at more detailed logs**: Add additional console.log statements in the server-side project endpoint to see exactly where it's failing.
+
+2. **Check the Freshbooks credentials**: Make sure your admin token has access to the projects API.
+
+3. **Try with a different project ID**: If possible, try accessing a different project to see if the issue is specific to one project.
+
+4. **Check your network tab**: In your browser dev tools, look at the network request to `/api/projects/:id` to see the exact response status code and body.
+
+If you can provide any of this additional information, I can help you narrow down the exact cause of the error more precisely.
