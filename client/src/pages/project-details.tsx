@@ -20,10 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Calendar, DollarSign, AlertTriangle } from "lucide-react";
+import { Loader2, Calendar, DollarSign, AlertTriangle, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +69,7 @@ interface FreshbooksProject {
   progress?: number;
 }
 
+// Helper function to safely format dates
 const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return 'Date not available';
   try {
@@ -79,6 +80,7 @@ const formatDate = (dateString: string | null | undefined): string => {
   }
 };
 
+// Helper function to get stage from progress
 const getStageFromProgress = (progress: number): ProjectStage => {
   const stages = Object.entries(PROJECT_STAGES);
   for (let i = stages.length - 1; i >= 0; i--) {
@@ -96,29 +98,45 @@ export default function ProjectDetails() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const isCustomer = user?.role === 'customer';
 
-  // Fetch project details from Freshbooks
-  const {
-    data: project,
-    isLoading: projectLoading,
-    error: projectError
+  // Fetch project details
+  const { 
+    data: project, 
+    isLoading: projectLoading, 
+    error: projectError 
   } = useQuery<FreshbooksProject>({
     queryKey: ["/api/freshbooks/clients", id, "projects", id],
     queryFn: async () => {
-      console.log('Fetching project details for ID:', id);
-      const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
-        credentials: 'include'
-      });
+      try {
+        console.log('Fetching project details for ID:', id);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Error: ${response.status}`);
+        const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+          credentials: 'include',
+        });
+
+        console.log('Response status:', response.status);
+
+        if (!response.ok) {
+          const contentType = response.headers.get('content-type');
+
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Error: ${response.status}`);
+          } else {
+            throw new Error(`Server error: ${response.status}`);
+          }
+        }
+
+        const data = await response.json();
+        console.log('Received project data:', data);
+        return data;
+      } catch (error) {
+        console.error('Error fetching project:', error);
+        throw error;
       }
-
-      const data = await response.json();
-      console.log('Received project data:', data);
-      return data;
-    }
+    },
+    retry: 1
   });
 
   // Add note mutation
@@ -136,7 +154,7 @@ export default function ProjectDetails() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
+      queryClient.invalidateQueries({ 
         queryKey: ["/api/projects", id, "notes"],
         refetchType: 'all'
       });
@@ -151,6 +169,37 @@ export default function ProjectDetails() {
       toast({
         title: "Error",
         description: "Failed to add note. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update progress mutation
+  const updateProgressMutation = useMutation({
+    mutationFn: async (progress: number) => {
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ progress })
+      });
+      if (!response.ok) throw new Error("Failed to update progress");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
+      toast({
+        title: "Success",
+        description: "Project progress updated",
+      });
+    },
+    onError: (error) => {
+      console.error("Error updating progress:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update progress. Please try again.",
         variant: "destructive",
       });
     },
@@ -204,39 +253,8 @@ export default function ProjectDetails() {
     updateProgressMutation.mutate(progress);
   };
 
-  // Update progress mutation
-  const updateProgressMutation = useMutation({
-    mutationFn: async (progress: number) => {
-      const response = await fetch(`/api/projects/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ progress })
-      });
-      if (!response.ok) throw new Error("Failed to update progress");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
-      toast({
-        title: "Success",
-        description: "Project progress updated",
-      });
-    },
-    onError: (error) => {
-      console.error("Error updating progress:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update progress. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Fetch project notes
-  const { data: notes, isLoading: notesLoading } = useQuery<ProjectNote[]>({
+  // Fetch project notes with shorter stale time
+  const { data: notes, isLoading: notesLoading, error: notesError } = useQuery<ProjectNote[]>({
     queryKey: ["/api/projects", id, "notes"],
     queryFn: async () => {
       const response = await fetch(`/api/projects/${id}/notes`, {
@@ -244,8 +262,11 @@ export default function ProjectDetails() {
       });
       if (!response.ok) throw new Error("Failed to fetch notes");
       return response.json();
-    }
+    },
+    staleTime: 0, // Always fetch fresh data
+    refetchOnMount: true // Refetch when component mounts
   });
+
 
   if (projectLoading) {
     return (
@@ -268,13 +289,31 @@ export default function ProjectDetails() {
             <AlertDescription>
               <div className="font-semibold">Error loading project:</div>
               <div className="mt-1">
-                {projectError instanceof Error ? projectError.message : "Failed to load project details"}
+                {projectError instanceof Error ? projectError.message : `Failed to load project details`}
+              </div>
+              <div className="mt-2 text-sm">
+                This could be due to a server error or an issue with the project ID.
               </div>
             </AlertDescription>
           </Alert>
-          <Button variant="outline" className="mt-4" asChild>
-            <Link href="/projects">Back to Projects</Link>
-          </Button>
+          <div className="mt-6 space-y-2">
+            <p className="text-sm text-muted-foreground">
+              You can try:
+            </p>
+            <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
+              <li>Refreshing the page</li>
+              <li>Checking if the project ID ({id}) is correct</li>
+              <li>Making sure you are logged in with the correct account</li>
+            </ul>
+          </div>
+          <div className="mt-6 flex gap-4">
+            <Button variant="default" onClick={() => window.location.reload()}>
+              Refresh Page
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/projects">Back to Projects</Link>
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -327,7 +366,7 @@ export default function ProjectDetails() {
         </Card>
 
         {/* Project Details Card */}
-        <Card className="mb-6">
+        <Card>
           <CardHeader>
             <CardTitle>Project Details</CardTitle>
           </CardHeader>
