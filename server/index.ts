@@ -129,24 +129,17 @@ apiRouter.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   res.status(status).json({ message });
 });
 
-// Mount API router before other middleware
-app.use('/api', apiRouter);
-
-// Global error handler (remains unchanged)
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  log('Unhandled error:', err);
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-  res.status(status).json({ message });
-});
-
+// Start the server
 (async () => {
   try {
     log('Starting server...');
     checkEnvironmentVariables();
 
-    // Register API routes first
-    const server = await registerRoutes(app);
+    // Register routes on the API router and get server instance
+    const server = await registerRoutes(apiRouter);
+
+    // Mount API router at /api before Vite middleware
+    app.use('/api', apiRouter);
 
     // Add Vite/static middleware after API routes
     if (app.get("env") === "development") {
@@ -154,6 +147,9 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     } else {
       serveStatic(app);
     }
+
+    // Attach Express app to the HTTP server
+    server.on('request', app);
 
     const port = 5000;
     server.listen({
@@ -168,3 +164,11 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     process.exit(1);
   }
 })();
+
+// Global error handler (remains unchanged)
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  log('Unhandled error:', err);
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  res.status(status).json({ message });
+});
