@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
@@ -151,6 +151,9 @@ interface FreshbooksProject {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Ensure JSON middleware is added before routes
+  app.use(express.json());
+  
   setupAuth(app);
   await createInitialAdminUser();
 
@@ -399,6 +402,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Password updated successfully" });
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  // Add debug endpoint for testing Freshbooks admin token
+  app.get("/api/debug/freshbooks", async (req, res) => {
+    try {
+      console.log("Testing Freshbooks admin token...");
+      const adminToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
+      
+      if (!adminToken) {
+        console.log("No FRESHBOOKS_ADMIN_TOKEN found in environment");
+        return res.status(400).json({
+          status: "error",
+          message: "No FRESHBOOKS_ADMIN_TOKEN set in environment"
+        });
+      }
+      
+      // Test with a basic Freshbooks API call
+      console.log("Making test call to Freshbooks API...");
+      const response = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Freshbooks API test failed:", {
+          status: response.status,
+          error: errorText
+        });
+        return res.status(response.status).json({
+          status: "error",
+          message: `Freshbooks API test failed: ${response.status}`,
+          details: errorText
+        });
+      }
+      
+      const data = await response.json();
+      console.log("Freshbooks API test successful:", data.response);
+      return res.json({
+        status: "success",
+        message: "Freshbooks token is valid",
+        data: data.response
+      });
+    } catch (error) {
+      console.error("Exception testing Freshbooks token:", error);
+      return res.status(500).json({
+        status: "error",
+        message: "Exception testing Freshbooks token",
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 

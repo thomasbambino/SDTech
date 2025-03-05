@@ -27,22 +27,6 @@ function checkEnvironmentVariables() {
 }
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-// Configure file upload middleware with proper error handling
-app.use(fileUpload({
-  createParentPath: true,
-  limits: { 
-    fileSize: 10 * 1024 * 1024 // 10MB max file size
-  },
-  abortOnLimit: true,
-  responseOnLimit: "File size limit reached (10MB)",
-  useTempFiles: false, // Store files in memory
-  debug: true, // Enable debug mode for better error logging
-  safeFileNames: true, // Remove special characters from filenames
-  preserveExtension: true // Keep file extensions
-}));
 
 // Configure session middleware first
 const sessionConfig = {
@@ -63,8 +47,29 @@ const sessionConfig = {
 app.set('trust proxy', 1);
 app.use(session(sessionConfig));
 
-// Add request logging middleware
-app.use((req, res, next) => {
+// Create a router for API endpoints
+const apiRouter = express.Router();
+
+// Essential middleware for API routes
+apiRouter.use(express.json());
+apiRouter.use(express.urlencoded({ extended: false }));
+
+// Configure file upload middleware with proper error handling
+apiRouter.use(fileUpload({
+  createParentPath: true,
+  limits: { 
+    fileSize: 10 * 1024 * 1024 // 10MB max file size
+  },
+  abortOnLimit: true,
+  responseOnLimit: "File size limit reached (10MB)",
+  useTempFiles: false, // Store files in memory
+  debug: true, // Enable debug mode for better error logging
+  safeFileNames: true, // Remove special characters from filenames
+  preserveExtension: true // Keep file extensions
+}));
+
+// Add request logging middleware for API routes
+apiRouter.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
@@ -75,34 +80,33 @@ app.use((req, res, next) => {
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
 
+  // Set proper content type for API responses
+  res.setHeader('Content-Type', 'application/json');
+
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+    let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+    if (capturedJsonResponse) {
+      logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
     }
+
+    if (logLine.length > 80) {
+      logLine = logLine.slice(0, 79) + "…";
+    }
+
+    log(logLine);
   });
 
   next();
 });
 
-// Add test endpoint
-app.get("/api/healthcheck", async (req, res) => {
+// Add healthcheck endpoint
+apiRouter.get("/healthcheck", async (req, res) => {
   try {
     const pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
     });
-    // Test database connection
     await pool.query('SELECT 1');
-    // If we get here, both the server and database are running
     res.json({ 
       status: "ok", 
       message: "Server is running",
@@ -117,7 +121,18 @@ app.get("/api/healthcheck", async (req, res) => {
   }
 });
 
-// Global error handler
+// Global error handler for API routes
+apiRouter.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  log('Unhandled API error:', err);
+  const status = err.status || err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  res.status(status).json({ message });
+});
+
+// Mount API router before other middleware
+app.use('/api', apiRouter);
+
+// Global error handler (remains unchanged)
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   log('Unhandled error:', err);
   const status = err.status || err.statusCode || 500;
@@ -130,8 +145,10 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     log('Starting server...');
     checkEnvironmentVariables();
 
+    // Register API routes first
     const server = await registerRoutes(app);
 
+    // Add Vite/static middleware after API routes
     if (app.get("env") === "development") {
       await setupVite(app, server);
     } else {
