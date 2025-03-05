@@ -1,7 +1,6 @@
 import { NavBar } from "@/components/nav-bar";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Project, ProjectNote } from "@shared/schema";
-import { useParams } from "wouter";
+import { useParams, Link } from "wouter";
 import { EditNoteDialog } from "@/components/edit-note-dialog";
 import {
   Card,
@@ -21,11 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Calendar, DollarSign } from "lucide-react";
+import { Loader2, Calendar, DollarSign, AlertTriangle, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 // Project stages with corresponding progress percentages
 const PROJECT_STAGES = {
@@ -41,6 +42,32 @@ const PROJECT_STAGES = {
 } as const;
 
 type ProjectStage = keyof typeof PROJECT_STAGES;
+
+interface ProjectNote {
+  id: number;
+  projectId: number;
+  content: string;
+  createdAt: string;
+  createdBy: number;
+  updatedAt?: string;
+}
+
+interface FreshbooksProject {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  dueDate?: string;
+  budget?: number;
+  fixedPrice?: boolean | string;
+  createdAt?: string;
+  clientId: string;
+  billingMethod?: string;
+  projectType?: string;
+  billedAmount?: number;
+  billedStatus?: string;
+  progress?: number;
+}
 
 // Helper function to safely format dates
 const formatDate = (dateString: string | null | undefined): string => {
@@ -71,33 +98,39 @@ export default function ProjectDetails() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const isCustomer = user?.role === 'customer';
 
-  // Fetch project details with aggressive refetching
-  const { data: project, isLoading: projectLoading } = useQuery<Project>({
-    queryKey: ["/api/projects", id],
+  // Fetch project details
+  const { 
+    data: project, 
+    isLoading: projectLoading, 
+    error: projectError 
+  } = useQuery<FreshbooksProject>({
+    queryKey: ["/api/freshbooks/clients", id, "projects"],
     queryFn: async () => {
       console.log('Fetching project details for ID:', id);
-      const response = await fetch(`/api/projects/${id}`, {
+      const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
         }
       });
-      if (!response.ok) throw new Error("Failed to fetch project");
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Error: ${response.status}`);
+      }
+
       const data = await response.json();
       console.log('Received project data:', data);
       return data;
     },
-    staleTime: 0, // Always fetch fresh data
-    cacheTime: 0, // Don't cache at all
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window regains focus
-    refetchInterval: 500 // Refetch every 500ms
+    refetchOnWindowFocus: true
   });
 
   // Fetch project notes with shorter stale time
-  const { data: notes } = useQuery<ProjectNote[]>({
+  const { data: notes, isLoading: notesLoading, error: notesError } = useQuery<ProjectNote[]>({
     queryKey: ["/api/projects", id, "notes"],
     queryFn: async () => {
       const response = await fetch(`/api/projects/${id}/notes`, {
@@ -230,6 +263,12 @@ export default function ProjectDetails() {
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
+  }
+
+  if (projectError) {
+    return <Alert variant="destructive">
+      <AlertDescription>Error loading project: {projectError.message}</AlertDescription>
+    </Alert>
   }
 
   if (!project) {
