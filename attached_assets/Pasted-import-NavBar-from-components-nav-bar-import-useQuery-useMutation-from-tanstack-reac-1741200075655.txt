@@ -100,26 +100,27 @@ export default function ProjectDetails() {
   const isAdmin = user?.role === 'admin';
   const isCustomer = user?.role === 'customer';
 
-  // Fetch project details
+  // Fetch project details with simplified endpoint
   const { 
     data: project, 
     isLoading: projectLoading, 
     error: projectError 
   } = useQuery<FreshbooksProject>({
-    queryKey: ["/api/freshbooks/clients", id, "projects", id],
+    queryKey: ["/api/projects", id],
     queryFn: async () => {
       try {
         console.log('Fetching project details for ID:', id);
-
-        const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+        
+        // Use the simple /api/projects/:id endpoint
+        const response = await fetch(`/api/projects/${id}`, {
           credentials: 'include',
         });
-
+        
         console.log('Response status:', response.status);
-
+        
         if (!response.ok) {
           const contentType = response.headers.get('content-type');
-
+          
           if (contentType && contentType.includes('application/json')) {
             const errorData = await response.json();
             throw new Error(errorData.error || `Error: ${response.status}`);
@@ -127,7 +128,7 @@ export default function ProjectDetails() {
             throw new Error(`Server error: ${response.status}`);
           }
         }
-
+        
         const data = await response.json();
         console.log('Received project data:', data);
         return data;
@@ -139,36 +140,90 @@ export default function ProjectDetails() {
     retry: 1
   });
 
+  // Fetch project notes
+  const { 
+    data: notes = [], 
+    isLoading: notesLoading,
+    error: notesError,
+    refetch: refetchNotes
+  } = useQuery<ProjectNote[]>({
+    queryKey: ["/api/projects", id, "notes"],
+    queryFn: async () => {
+      try {
+        const response = await fetch(`/api/projects/${id}/notes`, {
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Error: ${response.status}`);
+        }
+        
+        return response.json();
+      } catch (error) {
+        console.error('Error fetching notes:', error);
+        throw error;
+      }
+    },
+    enabled: !!project // Only fetch notes if project data loaded successfully
+  });
+
   // Add note mutation
   const addNoteMutation = useMutation({
     mutationFn: async (content: string) => {
-      const response = await fetch(`/api/projects/${id}/notes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ content })
-      });
-      if (!response.ok) throw new Error("Failed to add note");
+      const response = await apiRequest(
+        'POST',
+        `/api/projects/${id}/notes`, 
+        { content }
+      );
+      
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-        queryKey: ["/api/projects", id, "notes"],
-        refetchType: 'all'
-      });
+      refetchNotes();
       setNewNote("");
       toast({
         title: "Success",
         description: "Note added successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("Error adding note:", error);
       toast({
         title: "Error",
-        description: "Failed to add note. Please try again.",
+        description: error.message || "Failed to add note. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete note mutation
+  const deleteNoteMutation = useMutation({
+    mutationFn: async (noteId: number) => {
+      const response = await apiRequest(
+        'DELETE',
+        `/api/projects/${id}/notes/${noteId}`
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to delete note");
+      }
+      
+      return true;
+    },
+    onSuccess: () => {
+      refetchNotes();
+      toast({
+        title: "Success",
+        description: "Note deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      console.error("Error deleting note:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete note. Please try again.",
         variant: "destructive",
       });
     },
@@ -177,29 +232,26 @@ export default function ProjectDetails() {
   // Update progress mutation
   const updateProgressMutation = useMutation({
     mutationFn: async (progress: number) => {
-      const response = await fetch(`/api/projects/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ progress })
-      });
-      if (!response.ok) throw new Error("Failed to update progress");
+      const response = await apiRequest(
+        'PATCH',
+        `/api/projects/${id}`,
+        { progress }
+      );
+      
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
       toast({
         title: "Success",
-        description: "Project progress updated",
+        description: "Project progress updated successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("Error updating progress:", error);
       toast({
         title: "Error",
-        description: "Failed to update progress. Please try again.",
+        description: error.message || "Failed to update progress. Please try again.",
         variant: "destructive",
       });
     },
@@ -210,12 +262,18 @@ export default function ProjectDetails() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
+      
       const response = await fetch(`/api/projects/${id}/documents`, {
         method: "POST",
         credentials: "include",
         body: formData,
       });
-      if (!response.ok) throw new Error("Failed to upload file");
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to upload file");
+      }
+      
       return response.json();
     },
     onSuccess: () => {
@@ -226,11 +284,11 @@ export default function ProjectDetails() {
         description: "File uploaded successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("Error uploading file:", error);
       toast({
         title: "Error",
-        description: "Failed to upload file. Please try again.",
+        description: error.message || "Failed to upload file. Please try again.",
         variant: "destructive",
       });
     },
@@ -253,20 +311,12 @@ export default function ProjectDetails() {
     updateProgressMutation.mutate(progress);
   };
 
-  // Fetch project notes with shorter stale time
-  const { data: notes, isLoading: notesLoading, error: notesError } = useQuery<ProjectNote[]>({
-    queryKey: ["/api/projects", id, "notes"],
-    queryFn: async () => {
-      const response = await fetch(`/api/projects/${id}/notes`, {
-        credentials: 'include'
-      });
-      if (!response.ok) throw new Error("Failed to fetch notes");
-      return response.json();
-    },
-    staleTime: 0, // Always fetch fresh data
-    refetchOnMount: true // Refetch when component mounts
-  });
-
+  // Handle note deletion
+  const handleDeleteNote = (noteId: number) => {
+    if (confirm("Are you sure you want to delete this note?")) {
+      deleteNoteMutation.mutate(noteId);
+    }
+  };
 
   if (projectLoading) {
     return (
@@ -355,125 +405,57 @@ export default function ProjectDetails() {
           </Badge>
         </div>
 
-        {/* Project Description */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Project Description</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap">{project.description || 'No description provided'}</p>
-          </CardContent>
-        </Card>
-
-        {/* Project Details Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Project Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center">
-              <Calendar className="h-4 w-4 mr-2" />
-              <span>Created: {formatDate(project.createdAt?.toString())}</span>
-            </div>
-
-            {project.dueDate && (
-              <div className="flex items-center">
-                <Calendar className="h-4 w-4 mr-2" />
-                <span>Due: {formatDate(project.dueDate)}</span>
-              </div>
-            )}
-
-            {project.clientId && (
-              <div className="flex items-center">
-                <span className="mr-2">Client ID:</span>
-                <Badge variant="outline">{project.clientId}</Badge>
-              </div>
-            )}
-
-            {(project.budget || project.billedAmount) && (
-              <div className="flex items-center">
-                <DollarSign className="h-4 w-4 mr-2" />
-                <span>
-                  {project.budget ? `Budget: $${Number(project.budget).toLocaleString()}` : ''}
-                  {project.budget && project.billedAmount ? ' | ' : ''}
-                  {project.billedAmount ? `Billed: $${Number(project.billedAmount).toLocaleString()}` : ''}
-                </span>
-              </div>
-            )}
-
-            {project.billingMethod && (
-              <div className="flex items-center">
-                <span className="mr-2">Billing:</span>
-                <span>{project.billingMethod}</span>
-              </div>
-            )}
-
-            {project.projectType && (
-              <div className="flex items-center">
-                <span className="mr-2">Type:</span>
-                <span>{project.projectType}</span>
-              </div>
-            )}
-
-            {project.fixedPrice !== undefined && (
-              <div className="flex items-center">
-                <span className="mr-2">Fixed Price:</span>
-                <Badge variant={isFixedPrice ? "default" : "secondary"}>
-                  {isFixedPrice ? "Yes" : "No"}
-                </Badge>
-              </div>
-            )}
-
-            {project.billedStatus && (
-              <div className="flex items-center">
-                <span className="mr-2">Billing Status:</span>
-                <Badge>{project.billedStatus}</Badge>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Progress Section */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Project Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                {isAdmin && (
-                  <div className="w-64">
-                    <Select
-                      value={currentStage}
-                      onValueChange={(value) => handleStageChange(value as ProjectStage)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select project stage" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(PROJECT_STAGES).map(([stage, progress]) => (
-                          <SelectItem key={stage} value={stage}>
-                            {stage} ({progress}%)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <div className="flex-1 space-y-2">
-                  <Progress value={project.progress || 0} />
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>{project.progress || 0}% Complete</span>
-                    <span>{currentStage}</span>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Progress Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Project Progress</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    {isAdmin && (
+                      <div className="w-64">
+                        <Select
+                          value={currentStage}
+                          onValueChange={(value) => handleStageChange(value as ProjectStage)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select project stage" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(PROJECT_STAGES).map(([stage, progress]) => (
+                              <SelectItem key={stage} value={stage}>
+                                {stage} ({progress}%)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div className="flex-1 space-y-2">
+                      <Progress value={project.progress || 0} />
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>{project.progress || 0}% Complete</span>
+                        <span>{currentStage}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+            {/* Project Description */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Project Description</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="whitespace-pre-wrap">{project.description || 'No description provided'}</p>
+              </CardContent>
+            </Card>
+
             {/* Notes Section */}
             <Card>
               <CardHeader>
@@ -506,34 +488,135 @@ export default function ProjectDetails() {
                   </div>
 
                   <div className="space-y-4">
-                    {notes?.map((note) => (
-                      <Card key={note.id}>
-                        <CardContent className="pt-6">
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="flex-1">
-                              <p className="whitespace-pre-wrap mb-2">{note.content}</p>
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <span>By {note.createdBy === user?.id ? 'You' : `User ${note.createdBy}`}</span>
-                                <span className="mx-2">•</span>
-                                <span>{formatDate(note.createdAt)}</span>
+                    {notesLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      </div>
+                    ) : notesError ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>
+                          {notesError instanceof Error ? notesError.message : "Failed to load notes"}
+                        </AlertDescription>
+                      </Alert>
+                    ) : notes.length === 0 ? (
+                      <Alert>
+                        <AlertDescription>No notes yet. Add your first note above.</AlertDescription>
+                      </Alert>
+                    ) : (
+                      notes.map((note) => (
+                        <Card key={note.id}>
+                          <CardContent className="pt-6">
+                            <div className="flex justify-between items-start gap-4">
+                              <div className="flex-1">
+                                <p className="whitespace-pre-wrap mb-2">{note.content}</p>
+                                <div className="flex items-center text-sm text-muted-foreground">
+                                  <span>By {note.createdBy === user?.id ? 'You' : `User ${note.createdBy}`}</span>
+                                  <span className="mx-2">•</span>
+                                  <span>{formatDate(note.createdAt)}</span>
+                                  {note.updatedAt && note.updatedAt !== note.createdAt && (
+                                    <>
+                                      <span className="mx-2">•</span>
+                                      <span>(Edited {formatDate(note.updatedAt)})</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                {note.createdBy === user?.id && (
+                                  <>
+                                    <EditNoteDialog projectId={id} note={note} onSuccess={refetchNotes} />
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon"
+                                      onClick={() => handleDeleteNote(note.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </div>
-                            {note.createdBy === user?.id && (
-                              <EditNoteDialog projectId={id} note={note} />
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <div>
+          <div className="space-y-6">
+            {/* Project Details Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Project Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  <span>Created: {formatDate(project.createdAt?.toString())}</span>
+                </div>
+                
+                {project.dueDate && (
+                  <div className="flex items-center">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    <span>Due: {formatDate(project.dueDate)}</span>
+                  </div>
+                )}
+                
+                {project.clientId && (
+                  <div className="flex items-center">
+                    <span className="mr-2">Client ID:</span>
+                    <Badge variant="outline">{project.clientId}</Badge>
+                  </div>
+                )}
+                
+                {(project.budget || project.billedAmount) && (
+                  <div className="flex items-center">
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    <span>
+                      {project.budget ? `Budget: $${Number(project.budget).toLocaleString()}` : ''}
+                      {project.budget && project.billedAmount ? ' | ' : ''}
+                      {project.billedAmount ? `Billed: $${Number(project.billedAmount).toLocaleString()}` : ''}
+                    </span>
+                  </div>
+                )}
+                
+                {project.billingMethod && (
+                  <div className="flex items-center">
+                    <span className="mr-2">Billing:</span>
+                    <span>{project.billingMethod}</span>
+                  </div>
+                )}
+                
+                {project.projectType && (
+                  <div className="flex items-center">
+                    <span className="mr-2">Type:</span>
+                    <span>{project.projectType}</span>
+                  </div>
+                )}
+                
+                {project.fixedPrice !== undefined && (
+                  <div className="flex items-center">
+                    <span className="mr-2">Fixed Price:</span>
+                    <Badge variant={isFixedPrice ? "default" : "secondary"}>
+                      {isFixedPrice ? "Yes" : "No"}
+                    </Badge>
+                  </div>
+                )}
+                
+                {project.billedStatus && (
+                  <div className="flex items-center">
+                    <span className="mr-2">Billing Status:</span>
+                    <Badge>{project.billedStatus}</Badge>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* File Upload Section */}
-            <Card className="mb-6">
+            <Card>
               <CardHeader>
                 <CardTitle>Files</CardTitle>
                 <CardDescription>
@@ -564,13 +647,20 @@ export default function ProjectDetails() {
                     </Button>
                   </div>
 
-                  {/* File list will be implemented in the next iteration */}
+                  {/* File list placeholder - implement actual file list in future iteration */}
                   <div className="mt-4">
                     <p className="text-sm text-muted-foreground">No files uploaded yet</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
+            
+            {/* Navigation Buttons */}
+            <div className="flex justify-center">
+              <Button variant="outline" asChild>
+                <Link href="/projects">Back to Projects</Link>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
