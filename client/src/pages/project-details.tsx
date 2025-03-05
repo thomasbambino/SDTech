@@ -27,6 +27,9 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { format } from "date-fns";
 
 // Project stages with corresponding progress percentages
 const PROJECT_STAGES = {
@@ -96,6 +99,7 @@ export default function ProjectDetails() {
   const { toast } = useToast();
   const [newNote, setNewNote] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isEditingDueDate, setIsEditingDueDate] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isCustomer = user?.role === 'customer';
@@ -235,6 +239,47 @@ export default function ProjectDetails() {
       });
     },
   });
+
+  // Add due date update mutation
+  const updateDueDateMutation = useMutation({
+    mutationFn: async (date: Date) => {
+      const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          due_date: format(date, 'yyyy-MM-dd')
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update due date');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/freshbooks/clients", id, "projects", id]
+      });
+      toast({
+        title: "Success",
+        description: "Due date updated successfully",
+      });
+      setIsEditingDueDate(false);
+    },
+    onError: (error) => {
+      console.error("Error updating due date:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update due date. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -414,7 +459,7 @@ export default function ProjectDetails() {
                   Dates
                 </CardTitle>
                 {isAdmin && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditingDueDate(true)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
                 )}
@@ -425,9 +470,33 @@ export default function ProjectDetails() {
                 <span className="font-medium">Created:</span>{" "}
                 {formatDate(project.createdAt?.toString())}
               </div>
-              <div className="text-sm">
-                <span className="font-medium">Due:</span>{" "}
-                {project.dueDate ? formatDate(project.dueDate) : "Not set"}
+              <div className="text-sm flex items-center justify-between">
+                <div>
+                  <span className="font-medium">Due:</span>{" "}
+                  {project.dueDate ? formatDate(project.dueDate) : "Not set"}
+                </div>
+                {isEditingDueDate && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Select Date
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                      <CalendarComponent
+                        mode="single"
+                        selected={project.dueDate ? new Date(project.dueDate) : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            updateDueDateMutation.mutate(date);
+                          }
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
             </CardContent>
           </Card>
