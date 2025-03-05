@@ -867,44 +867,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
 
             if (!fbResponse.ok) {
-              console.error('Failed to fetch from Freshbooks:', {
-                status: fbResponse.status,
-                statusText: fbResponse.statusText
-              });
               throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
             }
 
             const fbData = await fbResponse.json();
-            console.log('Freshbooks API response:', fbData);
+            console.log('Raw Freshbooks response:', fbData);
 
             if (fbData.response?.result?.project) {
               const fbProject = fbData.response.result.project;
+              console.log('Current project data:', {
+                id: project.id,
+                title: project.title,
+                freshbooksId: project.freshbooksId
+              });
               console.log('Freshbooks project data:', {
                 id: fbProject.id,
                 title: fbProject.title,
-                description: fbProject.description,
-                complete: fbProject.complete
+                description: fbProject.description
               });
 
-              // Update local project with latest Freshbooks data
-              const updatedProject = await storage.updateProject(project.id, {
-                title: fbProject.title,
+              // Keep existing values if Freshbooks doesn't provide them
+              const updatedFields = {
+                title: fbProject.title || project.title,
                 description: fbProject.description || project.description,
                 status: fbProject.complete ? 'Completed' : 'Active',
                 progress: fbProject.complete ? 100 : project.progress
-              });
+              };
 
-              console.log('Updated project:', {
-                id: updatedProject.id,
-                title: updatedProject.title,
-                status: updatedProject.status
-              });
+              console.log('Updating project with fields:', updatedFields);
 
-              project = updatedProject;
+              // Update the project in the database
+              project = await storage.updateProject(project.id, updatedFields);
+              
+              if (!project) {
+                throw new Error('Failed to update project in database');
+              }
+
+              console.log('Project updated successfully:', {
+                id: project.id,
+                title: project.title,
+                status: project.status
+              });
             }
           }
         } catch (fbError) {
-          console.error('Error fetching from Freshbooks:', fbError);
+          console.error('Error syncing with Freshbooks:', fbError);
           // Continue with existing data if Freshbooks fails
         }
       }

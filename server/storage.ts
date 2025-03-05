@@ -140,6 +140,27 @@ export class DatabaseStorage implements IStorage {
     return project;
   }
 
+  async updateProject(id: number, project: Partial<Project>): Promise<Project> {
+    try {
+      console.log('Updating project in database:', {
+        id,
+        updates: project
+      });
+
+      const [updatedProject] = await db
+        .update(projects)
+        .set(project)
+        .where(eq(projects.id, id))
+        .returning();
+
+      console.log('Project updated successfully:', updatedProject);
+      return updatedProject;
+    } catch (error) {
+      console.error('Error updating project:', error);
+      throw error;
+    }
+  }
+
   async getProjectByFreshbooksId(freshbooksId: string): Promise<Project | undefined> {
     try {
       console.log("Looking up project by Freshbooks ID:", freshbooksId);
@@ -148,24 +169,12 @@ export class DatabaseStorage implements IStorage {
         .from(projects)
         .where(eq(projects.freshbooksId, freshbooksId.toString()));
 
-      console.log("Query results:", results);
+      console.log("Freshbooks ID lookup results:", results);
       return results[0];
     } catch (error) {
       console.error('Error in getProjectByFreshbooksId:', error);
-      return undefined;
+      throw error;
     }
-  }
-
-  async updateProject(id: number, project: Partial<Project>): Promise<Project> {
-    const [updatedProject] = await db
-      .update(projects)
-      .set({
-        ...project,
-        updatedAt: new Date()
-      })
-      .where(eq(projects.id, id))
-      .returning();
-    return updatedProject;
   }
 
   async getProjectNote(id: number): Promise<ProjectNote | undefined> {

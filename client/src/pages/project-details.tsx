@@ -93,7 +93,7 @@ export default function ProjectDetails() {
     cacheTime: 0, // Don't cache at all
     refetchOnMount: true, // Refetch when component mounts
     refetchOnWindowFocus: true, // Refetch when window regains focus
-    refetchInterval: 5000 // Refetch every 5 seconds
+    refetchInterval: 1000 // Refetch every second
   });
 
   // Fetch project notes with shorter stale time
