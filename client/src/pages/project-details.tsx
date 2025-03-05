@@ -59,14 +59,13 @@ interface FreshbooksProject {
   status: string;
   dueDate?: string;
   budget?: number;
-  fixedPrice?: boolean | string;
-  createdAt?: string;
+  fixedPrice?: string;
+  createdAt: string;
   clientId: string;
   billingMethod?: string;
   projectType?: string;
-  billedAmount?: number;
+  billedAmount?: string;
   billedStatus?: string;
-  progress?: number;
 }
 
 // Helper function to safely format dates
@@ -100,21 +99,12 @@ export default function ProjectDetails() {
   const isAdmin = user?.role === 'admin';
   const isCustomer = user?.role === 'customer';
 
-  // Fetch project details
-  const { 
-    data: project, 
-    isLoading: projectLoading, 
-    error: projectError 
-  } = useQuery<FreshbooksProject>({
+  // Fetch project details using the same endpoint as client profile
+  const { data: project, isLoading: projectLoading, error: projectError } = useQuery<FreshbooksProject>({
     queryKey: ["/api/freshbooks/clients", id, "projects"],
     queryFn: async () => {
-      console.log('Fetching project details for ID:', id);
       const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
-        credentials: 'include',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
+        credentials: 'include'
       });
 
       if (!response.ok) {
@@ -122,11 +112,8 @@ export default function ProjectDetails() {
         throw new Error(errorData.error || `Error: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('Received project data:', data);
-      return data;
-    },
-    refetchOnWindowFocus: true
+      return response.json();
+    }
   });
 
   // Fetch project notes with shorter stale time
@@ -285,7 +272,7 @@ export default function ProjectDetails() {
           <div>
             <h1 className="text-3xl font-bold">{project.title}</h1>
             <p className="text-muted-foreground">
-              Created {formatDate(project.createdAt?.toString())}
+              Created {formatDate(project.createdAt)}
             </p>
           </div>
           <p className="text-sm text-muted-foreground">{project.status}</p>
@@ -448,7 +435,7 @@ export default function ProjectDetails() {
               <CardContent className="space-y-2">
                 <div className="flex items-center">
                   <Calendar className="h-4 w-4 mr-2" />
-                  <span>Created: {formatDate(project.createdAt?.toString())}</span>
+                  <span>Created: {formatDate(project.createdAt)}</span>
                 </div>
                 <div className="flex items-center">
                   <DollarSign className="h-4 w-4 mr-2" />

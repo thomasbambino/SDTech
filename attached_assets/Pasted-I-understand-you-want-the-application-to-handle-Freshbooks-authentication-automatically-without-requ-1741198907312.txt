@@ -1,0 +1,114 @@
+I understand you want the application to handle Freshbooks authentication automatically without requiring you to manually connect, and to make those credentials available throughout the app. Let me explain a better approach and provide a solution.
+
+Looking at your server code, I see there's already a mechanism that could help with this - the `FRESHBOOKS_ADMIN_TOKEN` environment variable. In the `createInitialAdminUser` function, the admin user is created with this token:
+
+```javascript
+await storage.createUser({
+  username: 'admin@sdtechpros.com',
+  password: hashedPassword,
+  email: 'admin@sdtechpros.com',
+  role: 'admin',
+  companyName: 'SD Tech Pros',
+  isTemporaryPassword: false,
+  freshbooksToken: process.env.FRESHBOOKS_ADMIN_TOKEN
+});
+```
+
+Here's what we need to do to implement automatic Freshbooks authentication across the app:
+
+Based on your request, I've created a solution that will allow your app to automatically use a Freshbooks token across the entire application without requiring manual authentication. Here's how it works:
+
+## Solution Overview
+
+1. **Use an Admin Token as a Fallback**: Instead of solely relying on session-based authentication, your app will use a permanent admin token when needed.
+
+2. **Token Hierarchy**:
+   - First try to use any session-based token if available
+   - Automatically fall back to the admin token from environment variables
+   - Only fail if neither token source is available
+
+3. **Simplified Client-Side Code**: The front-end no longer needs to worry about Freshbooks authentication - it just makes API requests and the server handles the token logic.
+
+## Implementation Details
+
+### 1. Server-Side Updates
+
+In your server code, add this fallback mechanism to all endpoints that use Freshbooks:
+
+```javascript
+// Example for the project details endpoint
+let accessToken;
+    
+// First try to get tokens from session
+if (req.session.freshbooksTokens?.access_token) {
+  console.log('Using session Freshbooks tokens');
+  accessToken = req.session.freshbooksTokens.access_token;
+} 
+// If no session tokens, try to get the admin token from environment
+else if (process.env.FRESHBOOKS_ADMIN_TOKEN) {
+  console.log('Using admin token from environment');
+  accessToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
+} 
+// No tokens available
+else {
+  return res.status(401).json({ error: "Freshbooks authentication required" });
+}
+```
+
+For cleaner code, I've included a helper function that you can use throughout your app:
+
+```javascript
+function getFreshbooksToken(req) {
+  // Try session token first
+  if (req.session.freshbooksTokens?.access_token) {
+    return req.session.freshbooksTokens.access_token;
+  }
+  
+  // Fall back to admin token
+  if (process.env.FRESHBOOKS_ADMIN_TOKEN) {
+    return process.env.FRESHBOOKS_ADMIN_TOKEN;
+  }
+  
+  // No token available
+  return null;
+}
+```
+
+### 2. Client-Side Updates
+
+Your client code becomes much simpler. There's no need to check for token availability or implement fallbacks:
+
+```typescript
+// Simplified project fetch
+const { data: project } = useQuery<FreshbooksProject>({
+  queryKey: ["/api/projects", id],
+  queryFn: async () => {
+    const response = await fetch(`/api/projects/${id}`, {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      // Handle errors...
+    }
+    
+    return response.json();
+  }
+});
+```
+
+### 3. Setting Up the Admin Token
+
+To set this up:
+
+1. Obtain a permanent Freshbooks API token through their developer portal
+2. Set it as an environment variable named `FRESHBOOKS_ADMIN_TOKEN`
+3. Make sure this token is kept secure and only accessible to your server
+
+## Benefits of This Approach
+
+- **User Experience**: Users never have to manually authenticate with Freshbooks
+- **Simplicity**: Your client code is cleaner without authentication logic
+- **Reliability**: Even if sessions expire, the app continues to work
+- **Flexibility**: You still support user-specific tokens when available
+
+This approach provides the automatic, app-wide Freshbooks authentication you're looking for while maintaining security and flexibility.
