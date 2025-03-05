@@ -99,54 +99,25 @@ export default function ProjectDetails() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  // Fetch project details with optimized settings
+  // Fetch project details
   const {
     data: project,
     isLoading: projectLoading,
     error: projectError
   } = useQuery<FreshbooksProject>({
-    queryKey: ["/api/freshbooks/clients", id, "projects", id],
+    queryKey: ["/api/projects", id],
     queryFn: async () => {
-      try {
-        const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
-          credentials: 'include'
-        });
+      const response = await fetch(`/api/projects/${id}`, {
+        credentials: 'include'
+      });
 
-        if (!response.ok) {
-          if (response.status === 429) {
-            const retryAfter = response.headers.get('Retry-After');
-            throw new Error(`Rate limited. Please retry after ${retryAfter || 30} seconds.`);
-          }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Error: ${response.status}`);
+      }
 
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Error: ${response.status}`);
-          } else {
-            throw new Error(`Server error: ${response.status}`);
-          }
-        }
-
-        return response.json();
-      } catch (error) {
-        console.error('Error fetching project:', error);
-        throw error;
-      }
-    },
-    staleTime: 60000, // Consider data fresh for 60 seconds
-    cacheTime: 3600000, // Cache for 1 hour
-    retry: (failureCount, error) => {
-      // Don't retry on 404s
-      if (error instanceof Error && error.message.includes('404')) {
-        return false;
-      }
-      // For rate limits, only retry once after the specified delay
-      if (error instanceof Error && error.message.includes('Rate limited')) {
-        return failureCount === 0;
-      }
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000)
+      return response.json();
+    }
   });
 
   // Add note mutation
@@ -263,7 +234,7 @@ export default function ProjectDetails() {
     updateProgressMutation.mutate(progress);
   };
 
-  // Fetch project notes with optimized settings
+  // Fetch project notes
   const { data: notes, isLoading: notesLoading } = useQuery<ProjectNote[]>({
     queryKey: ["/api/projects", id, "notes"],
     queryFn: async () => {
@@ -271,24 +242,11 @@ export default function ProjectDetails() {
         credentials: 'include'
       });
       if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error("Rate limited. Please try again later.");
-        }
         throw new Error("Failed to fetch notes");
       }
       return response.json();
-    },
-    staleTime: 60000, // Consider data fresh for 60 seconds
-    cacheTime: 3600000, // Cache for 1 hour
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Rate limited')) {
-        return failureCount === 0;
-      }
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000)
+    }
   });
-
 
   if (projectLoading) {
     return (
@@ -302,9 +260,6 @@ export default function ProjectDetails() {
   }
 
   if (projectError) {
-    const isRateLimit = projectError instanceof Error &&
-                       projectError.message.includes('429');
-
     return (
       <div className="min-h-screen bg-background">
         <NavBar />
@@ -316,36 +271,11 @@ export default function ProjectDetails() {
               <div className="mt-1">
                 {projectError instanceof Error ? projectError.message : "Failed to load project details"}
               </div>
-              <div className="mt-2 text-sm">
-                {projectError instanceof Error && projectError.message.includes('Rate limited') ?
-                  "The application is receiving too many requests. This is temporary and will resolve shortly." :
-                  "This could be due to a server error or an issue with the project ID."
-                }
-              </div>
             </AlertDescription>
           </Alert>
-          <div className="mt-6 space-y-2">
-            <p className="text-sm text-muted-foreground">
-              You can try:
-            </p>
-            <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
-              <li>Waiting a few moments before refreshing</li>
-              <li>Checking if the project ID ({id}) is correct</li>
-              <li>Making sure you are logged in with the correct account</li>
-            </ul>
-          </div>
-          <div className="mt-6 flex gap-4">
-            <Button
-              variant="default"
-              onClick={() => window.location.reload()}
-              disabled={projectError instanceof Error && projectError.message.includes('Rate limited')}
-            >
-              Refresh Page
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href="/projects">Back to Projects</Link>
-            </Button>
-          </div>
+          <Button variant="outline" className="mt-4" asChild>
+            <Link href="/projects">Back to Projects</Link>
+          </Button>
         </div>
       </div>
     );
