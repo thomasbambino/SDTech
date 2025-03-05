@@ -839,29 +839,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add project details endpoint
   app.get("/api/projects/:id", async (req, res) => {
     try {
-      // Verify authentication
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Authentication required" });
-      }
-
-      const authenticatedUser = req.user as Express.User;
-      if (!authenticatedUser) {
-        return res.status(401).json({ error: "User not found" });
       }
 
       const projectId = req.params.id;
       console.log('Fetching project details from Freshbooks for ID:', projectId);
 
-      // Get admin token - required for both admin and customer access
-      const adminToken = process.env.FRESHBOOKS_ADMIN_TOKEN;
-      if (!adminToken) {
-        throw new Error("Admin token not configured");
+      // Get Freshbooks tokens from session
+      const tokens = req.session.freshbooksTokens;
+      if (!tokens?.access_token) {
+        return res.status(401).json({ error: "Freshbooks authentication required" });
       }
 
       // Get business account ID
       const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
         headers: {
-          'Authorization': `Bearer ${adminToken}`,
+          'Authorization': `Bearer ${tokens.access_token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -877,12 +871,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("No account ID found in profile");
       }
 
-      // Fetch project directly from Freshbooks API
+      // Fetch project from Freshbooks using the same endpoint as client profile
       const fbResponse = await fetch(
-        `https://api.freshbooks.com/projects/business/${accountId}/projects/${projectId}`,
+        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
         {
           headers: {
-            'Authorization': `Bearer ${adminToken}`,
+            'Authorization': `Bearer ${tokens.access_token}`,
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache'
           }
@@ -896,30 +890,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const fbData = await fbResponse.json();
       console.log('Freshbooks response:', fbData);
 
-      if (!fbData.project) {
+      if (!fbData.response?.result?.project) {
         return res.status(404).json({ error: "Project not found in Freshbooks" });
       }
 
-      // Get the project data from Freshbooks response
-      const fbProject = fbData.project as FreshbooksProject;
+      const fbProject = fbData.response.result.project;
 
-      // Format project data
+      // Format project data exactly like in client profile
       const project = {
         id: fbProject.id.toString(),
         title: fbProject.title,
         description: fbProject.description || '',
-        status: fbProject.completed ? 'Completed' : 'Active', 
-        progress: fbProject.completed ? 100 : 0,
-        createdAt: fbProject.created_at ? new Date(fbProject.created_at) : null,
-        clientId: fbProject.client_id.toString()
+        status: fbProject.complete ? 'Completed' : 'Active', 
+        createdAt: fbProject.created_at,
+        clientId: fbProject.client_id?.toString(),
+        budget: fbProject.budget,
+        fixedPrice: fbProject.fixed_price ? 'Yes' : 'No',
+        billingMethod: fbProject.billing_method
       };
-
-      // For non-admin users, verify they have access to this project
-      if (authenticatedUser.role !== 'admin') {
-        if (!project.clientId || authenticatedUser.freshbooksId !== project.clientId) {
-          return res.status(403).json({ error: "Access denied" });
-        }
-      }
 
       res.json(project);
     } catch (error) {
