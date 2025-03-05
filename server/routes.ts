@@ -829,24 +829,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           if (!meResponse.ok) {
+            console.error('Failed to get Freshbooks user details:', 
+              { status: meResponse.status, text: await meResponse.text() });
             throw new Error(`Failed to get account details: ${meResponse.status}`);
           }
 
           const meData = await meResponse.json();
+          console.log('Freshbooks user data:', meData);
+          
           const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
-
           if (!accountId) {
             throw new Error("No account ID found in profile");
           }
 
-          console.log('Fetching project from Freshbooks:', {
-            accountId,
-            projectId
-          });
-
-          // Fetch project from Freshbooks
+          // Use the v1 projects endpoint instead of accounting API
           const fbResponse = await fetch(
-            `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
+            `https://api.freshbooks.com/projects/business/${accountId}/projects/${projectId}`,
             {
               headers: {
                 'Authorization': `Bearer ${tokens.access_token}`,
@@ -870,59 +868,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const fbData = await fbResponse.json();
           console.log('Freshbooks response:', fbData);
 
-          if (!fbData.response?.result?.project) {
+          if (!fbData.project) {
             return res.status(404).json({ error: "Project not found in Freshbooks" });
           }
 
-          const fbProject = fbData.response.result.project;
+          const fbProject = fbData.project;
 
           // Get or create local project record for our app-specific data
           let localProject = await storage.getProjectByFreshbooksId(projectId);
           
-          if (!localProject) {
-            // Create minimal local record for our app-specific data
-            localProject = await storage.createProject({
-              title: fbProject.title,
-              description: fbProject.description || '',
-              status: fbProject.complete ? 'Completed' : 'Active',
-              progress: fbProject.complete ? 100 : 0,
-              clientId: null, // We'll update this later if needed
-              freshbooksId: fbProject.id.toString()
-            });
-          }
-
-          // Combine Freshbooks data with our local data
-          const project = {
-            id: localProject.id,
+          const projectData = {
+            id: localProject?.id,
             title: fbProject.title,
             description: fbProject.description || '',
-            status: fbProject.complete ? 'Completed' : 'Active',
-            progress: fbProject.complete ? 100 : localProject.progress,
-            clientId: localProject.clientId,
+            status: fbProject.completed ? 'Completed' : 'Active',
+            progress: fbProject.completed ? 100 : (localProject?.progress || 0),
+            clientId: localProject?.clientId || null,
             freshbooksId: fbProject.id.toString(),
             createdAt: fbProject.created_at ? new Date(fbProject.created_at) : null
           };
 
-          res.json(project);
+          // If we don't have a local record, create one
+          if (!localProject) {
+            localProject = await storage.createProject({
+              title: projectData.title,
+              description: projectData.description,
+              status: projectData.status,
+              progress: projectData.progress,
+              clientId: projectData.clientId,
+              freshbooksId: projectData.freshbooksId
+            });
+            projectData.id = localProject.id;
+          }
+
+          res.json(projectData);
           return;
         } catch (fbError) {
           console.error('Error fetching from Freshbooks:', fbError);
-          throw fbError; // Re-throw to return 500 error
+          // Try to fall back to local data
+          const localProject = await storage.getProjectByFreshbooksId(projectId);
+          if (localProject) {
+            return res.json(localProject);
+          }
+          throw fbError;
         }
-      } else {
-        // For non-admin users, look up by local ID
-        const localProject = await storage.getProject(Number(projectId));
-        if (!localProject) {
-          return res.status(404).json({ error: "Project not found" });
-        }
-
-        // Verify user has access to this project
-        if (!localProject.clientId || localProject.clientId !== authenticatedUser.id) {
-          return res.status(403).json({ error: "Access denied" });
-        }
-
-        res.json(localProject);
       }
+
+      // For non-admin users, look up by local ID
+      const localProject = await storage.getProject(Number(projectId));
+      if (!localProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Verify user has access to this project
+      if (!localProject.clientId || localProject.clientId !== authenticatedUser.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      res.json(localProject);
     } catch (error) {
       console.error('Error fetching project:', error);
       res.status(500).json({
