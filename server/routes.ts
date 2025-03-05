@@ -903,14 +903,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           const fbData = await fbResponse.json();
-          console.log('Freshbooks response:', fbData);
+          console.log('Raw Freshbooks response:', fbData);
 
           if (!fbData.project) {
             return res.status(404).json({ error: "Project not found in Freshbooks" });
           }
 
           const fbProject = fbData.project;
-          console.log('Processing Freshbooks project:', fbProject);
+          console.log('Freshbooks project data:', fbProject);
 
           // Get or create local project record
           let localProject = await storage.getProjectByFreshbooksId(projectId);
@@ -924,12 +924,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             freshbooksId: fbProject.id.toString()
           };
 
+          console.log('Updating project with data:', projectData);
+
           if (localProject) {
-            // Update existing record
+            // Update existing record with latest Freshbooks data
             localProject = await storage.updateProject(localProject.id, projectData);
             console.log('Updated local project:', localProject);
           } else {
-            // Create new record
+            // Create new record if it doesn't exist
             localProject = await storage.createProject({
               ...projectData,
               clientId: null // Set proper client ID when available
@@ -937,14 +939,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log('Created new local project:', localProject);
           }
 
-          res.json({
+          // Return combined data, prioritizing Freshbooks data
+          const response = {
             ...localProject,
-            ...projectData // Ensure we return the latest Freshbooks data
-          });
+            ...projectData
+          };
+
+          console.log('Sending response:', response);
+          res.json(response);
           return;
+
         } catch (fbError) {
           console.error('Error fetching from Freshbooks:', fbError);
-          // Try to fall back to local data
+          // Only fall back to local data if we have it
           const localProject = await storage.getProjectByFreshbooksId(projectId);
           if (localProject) {
             return res.json(localProject);
@@ -953,7 +960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // For non-admin users, look up by local ID
+      // For non-admin users, only use local data
       const localProject = await storage.getProject(Number(projectId));
       if (!localProject) {
         return res.status(404).json({ error: "Project not found" });
@@ -965,6 +972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json(localProject);
+
     } catch (error) {
       console.error('Error fetching project:', error);
       res.status(500).json({
