@@ -899,6 +899,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 });
 
+// Add PUT endpoint for updating projects
+  app.put("/api/freshbooks/projects/:projectId", async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const { projectId } = req.params;
+      const { project } = req.body;
+
+      console.log('Updating project in Freshbooks:', { 
+        projectId, 
+        project,
+        requestBody: req.body 
+      });
+
+      const accessToken = getFreshbooksToken(req);
+      if (!accessToken) {
+        console.error('No Freshbooks access token available');
+        return res.status(401).json({ 
+          error: "Freshbooks authentication required" 
+        });
+      }
+
+      // Get business ID
+      console.log('Fetching user profile with token');
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        console.error('Failed to get account details:', {
+          status: meResponse.status,
+          statusText: meResponse.statusText
+        });
+        throw new Error(`Failed to get account details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+
+      if (!businessId) {
+        console.error('No business ID found in profile response');
+        throw new Error("No business ID found in profile");
+      }
+
+      console.log('Using business ID:', businessId);
+
+      // Update project using Projects API
+      console.log('Updating project in Freshbooks');
+      const fbResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/projects/${projectId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ project })
+        }
+      );
+
+      if (!fbResponse.ok) {
+        const responseText = await fbResponse.text();
+        console.error('Failed to update project:', {
+          status: fbResponse.status,
+          statusText: fbResponse.statusText,
+          requestBody: { project },
+          responseBody: responseText
+        });
+        throw new Error(`Failed to update project: ${fbResponse.status} - ${responseText}`);
+      }
+
+      const responseData = await fbResponse.json();
+      console.log('Successfully updated project:', responseData);
+      res.json(responseData.project);
+    } catch (error) {
+      console.error('Error updating project:', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      res.status(500).json({
+        error: "Failed to update project",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
 // Add PATCH endpoint for updating project due date
   app.patch("/api/freshbooks/clients/:clientId/projects/:projectId", async (req: AuthenticatedRequest, res: Response) => {
     try {

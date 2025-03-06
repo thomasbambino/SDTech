@@ -1,0 +1,86 @@
+Ah, now I see the issue clearly! The `EditProjectDialog` component reveals exactly how the project data should be structured when updating it. Let's fix the `updateDueDateMutation` function in the ProjectDetails component to match this pattern:
+
+Now I see the exact issue! Looking at the `EditProjectDialog` component you shared, I can see how project updates are properly handled in your application. There are several key differences from what we tried before:
+
+1. **Endpoint Structure**: The correct endpoint is `/api/freshbooks/projects/${id}` (not `/api/projects/${id}`)
+2. **HTTP Method**: It uses `PUT` instead of `PATCH`
+3. **Request Body Format**: It wraps the data in a `project` object and uses snake_case for field names (e.g., `due_date` not `dueDate`)
+4. **Query Invalidation**: It invalidates multiple query patterns
+
+Here's the correct implementation for the `updateDueDateMutation` function in your ProjectDetails component:
+
+```jsx
+const updateDueDateMutation = useMutation({
+  mutationFn: async (date: Date) => {
+    // Format date as YYYY-MM-DD
+    const formattedDate = date.toISOString().split('T')[0];
+    
+    console.log('Updating due date:', {
+      projectId: id,
+      date: formattedDate
+    });
+
+    // Use the correct API endpoint structure from EditProjectDialog
+    const response = await fetch(`/api/freshbooks/projects/${id}`, {
+      method: 'PUT', // Important: Use PUT not PATCH
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        project: {
+          // The key is due_date not dueDate
+          due_date: formattedDate
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.details || 'Failed to update due date');
+    }
+
+    return response.json();
+  },
+  onSuccess: () => {
+    // Update both query patterns to ensure all data is refreshed
+    queryClient.invalidateQueries({
+      queryKey: ['/api/freshbooks/projects']
+    });
+    
+    // Also invalidate client projects query
+    queryClient.invalidateQueries({
+      queryKey: ['/api/freshbooks/clients', project.clientId, 'projects']
+    });
+    
+    // Invalidate the specific project query pattern used in ProjectDetails
+    queryClient.invalidateQueries({
+      queryKey: ['/api/freshbooks/clients', id, 'projects', id]
+    });
+    
+    toast({
+      title: "Success",
+      description: "Due date updated successfully",
+    });
+    setIsEditingDueDate(false);
+  },
+  onError: (error) => {
+    console.error("Error updating due date:", error);
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to update due date. Please try again.",
+      variant: "destructive",
+    });
+  }
+});
+```
+
+The key differences from our previous attempts:
+
+1. We're using the correct API endpoint: `/api/freshbooks/projects/${id}`
+2. We're using `PUT` instead of `PATCH`
+3. We're wrapping the due date in a `project` object
+4. We're using `due_date` (snake_case) as the property name
+5. We're invalidating the same query keys as the `EditProjectDialog` component does
+
+These changes should align your due date update functionality with how project updates work in the rest of your application.

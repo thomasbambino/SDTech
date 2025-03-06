@@ -243,19 +243,25 @@ export default function ProjectDetails() {
   // Add due date update mutation
   const updateDueDateMutation = useMutation({
     mutationFn: async (date: Date) => {
+      // Format date as YYYY-MM-DD
+      const formattedDate = date.toISOString().split('T')[0];
+
       console.log('Updating due date:', {
         projectId: id,
-        date: date.toISOString().split('T')[0]  // Format: YYYY-MM-DD
+        date: formattedDate
       });
 
-      const response = await fetch(`/api/projects/${id}`, {
-        method: 'PATCH',
+      // Use the correct API endpoint structure
+      const response = await fetch(`/api/freshbooks/projects/${id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
         credentials: 'include',
         body: JSON.stringify({
-          dueDate: date.toISOString().split('T')[0]  // Format: YYYY-MM-DD
+          project: {
+            due_date: formattedDate
+          }
         })
       });
 
@@ -267,13 +273,19 @@ export default function ProjectDetails() {
       return response.json();
     },
     onSuccess: () => {
-      // Invalidate both queries to ensure UI updates
+      // Update both query patterns to ensure all data is refreshed
       queryClient.invalidateQueries({
-        queryKey: ["/api/freshbooks/clients", id, "projects", id]
+        queryKey: ['/api/freshbooks/projects']
       });
 
+      // Also invalidate client projects query
       queryClient.invalidateQueries({
-        queryKey: ["/api/projects", id]
+        queryKey: ['/api/freshbooks/clients', project?.clientId, 'projects']
+      });
+
+      // Invalidate the specific project query pattern used in ProjectDetails
+      queryClient.invalidateQueries({
+        queryKey: ['/api/freshbooks/clients', id, 'projects', id]
       });
 
       toast({
