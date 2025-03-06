@@ -245,7 +245,7 @@ export default function ProjectDetails() {
     mutationFn: async (date: Date) => {
       console.log('Updating due date:', {
         projectId: id,
-        date: date.toISOString().split('T')[0] // Format: YYYY-MM-DD
+        date: date.toISOString().split('T')[0]  // Format: YYYY-MM-DD
       });
 
       const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {

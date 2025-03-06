@@ -907,9 +907,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { clientId, projectId } = req.params;
-      const { due_date } = req.body as { due_date: string };
+      const { project } = req.body;
 
-      console.log('Updating project due date in Freshbooks:', { clientId, projectId, due_date });
+      console.log('Updating project due date in Freshbooks:', { clientId, projectId, project });
 
       const accessToken = getFreshbooksToken(req);
       if (!accessToken) {
@@ -964,11 +964,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            project: {
-              due_date: due_date
-            }
-          })
+          body: JSON.stringify({ project })
         }
       );
 
@@ -1291,108 +1287,7 @@ app.get("/api/freshbooks/clients", async (req, res) => {
     }
   });
 
-  // Add PATCH endpoint for updating project due date
-  app.patch("/api/freshbooks/clients/:clientId/projects/:projectId", async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-
-      const { clientId, projectId } = req.params;
-      const { due_date } = req.body as { due_date: string };
-
-      console.log('Updating project due date in Freshbooks:', { clientId, projectId, due_date });
-
-      // Get the token using the helper function  
-      const accessToken = getFreshbooksToken(req);
-      if (!accessToken) {
-        console.error('No Freshbooks access token available');
-        return res.status(401).json({ 
-          error: "Freshbooks authentication required" 
-        });
-      }
-
-      // Get business ID
-      console.log('Fetching user profile with token to get business ID');
-      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!meResponse.ok) {
-        console.error('Failed to get account details:', {
-          status: meResponse.status,
-          statusText: meResponse.statusText,
-          text: await meResponse.text()
-        });
-        throw new Error(`Failed to get account details: ${meResponse.status}`);
-      }
-
-      const meData = await meResponse.json();
-      console.log('Received profile data:', {
-        hasResponse: !!meData.response,
-        hasBusinessMemberships: !!meData.response?.business_memberships,
-        membershipCount: meData.response?.business_memberships?.length || 0
-      });
-      
-      // Get businessId instead of accountId
-      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
-
-      if (!businessId) {
-        console.error('No business ID found in profile response', meData);
-        throw new Error("No business ID found in profile");
-      }
-
-      console.log('Using business ID:', businessId);
-
-      // Use projects API instead of accounting API
-      console.log('Updating project using Freshbooks Projects API');
-      const fbResponse = await fetch(
-        `https://api.freshbooks.com/projects/business/${businessId}/projects/${projectId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            project: {
-              due_date: due_date
-            }
-          })
-        }
-      );
-
-      if (!fbResponse.ok) {
-        console.error('Failed to update project in Freshbooks:', {
-          status: fbResponse.status,
-          statusText: fbResponse.statusText,
-          text: await fbResponse.text()
-        });
-        throw new Error(`Failed to update project: ${fbResponse.status}`);
-      }
-
-      const responseData = await fbResponse.json() as FreshbooksProjectResponse;
-      console.log('Successfully updated project:', responseData);
-      res.json(responseData.project);
-    } catch (error) {
-      console.error('Error updating project:', {
-        error,
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      res.status(500).json({
-        error: "Failed to update project", 
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-
-
-
-    // Setup all routes
+  // Setup all routes
   app.get("/api/mailgun/status", requireAdmin, async (req, res) => {
     try {
       const configured = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
