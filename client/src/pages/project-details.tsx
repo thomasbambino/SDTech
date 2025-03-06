@@ -71,6 +71,8 @@ interface FreshbooksProject {
   billedAmount?: number;
   billedStatus?: string;
   progress?: number;
+  active?: boolean; // Added to handle status properly
+  created_at?: string; // Added to handle createdAt consistently
 }
 
 // Helper function to safely format dates with better error handling and logging
@@ -129,8 +131,6 @@ export default function ProjectDetails() {
           credentials: 'include',
         });
 
-        console.log('Response status:', response.status);
-
         if (!response.ok) {
           const contentType = response.headers.get('content-type');
           if (contentType && contentType.includes('application/json')) {
@@ -142,30 +142,45 @@ export default function ProjectDetails() {
         }
 
         const data = await response.json();
-        console.log('FULL RAW API RESPONSE:', JSON.stringify(data));
+        console.log('Raw API response:', data);
 
-        // Extract the due date at each possible location and log it
-        console.log('Direct due_date:', data.due_date);
-        console.log('Direct dueDate:', data.dueDate);
-        console.log('Nested project.due_date:', data.project?.due_date);
+        // Extract project data from the correct location
+        // The data might be in different structures
+        const projectData = data.rawResponse?.project || data.project || data;
 
-        // Continue with your transformation logic...
-        const projectData = data.project || data;
         console.log('Extracted project data:', projectData);
 
+        // Extract due date directly from the project data
+        const dueDateValue = projectData.due_date;
+        console.log('Found due date value:', dueDateValue);
+
+        // Transform the data to match our interface
         const transformedData = {
           ...projectData,
           id: projectData.id?.toString(),
+          title: projectData.title,
+          description: projectData.description || '',
+          status: projectData.active ? 'Active' : 'Inactive',
+
+          // Set both date properties
+          due_date: dueDateValue,
+          dueDate: dueDateValue,
+
+          // Other properties...
+          createdAt: projectData.created_at || projectData.createdAt,
           clientId: (projectData.client_id || projectData.clientId)?.toString(),
-          due_date: projectData.due_date || undefined,
-          dueDate: projectData.due_date || projectData.dueDate,
+          // ... rest of the properties
+          budget: projectData.budget,
+          fixedPrice: projectData.fixedPrice,
+          billingMethod: projectData.billingMethod,
+          projectType: projectData.projectType,
+          billedAmount: projectData.billedAmount,
+          billedStatus: projectData.billedStatus,
+          progress: projectData.progress
         };
 
-        console.log('Final transformed data:', {
-          due_date: transformedData.due_date,
-          dueDate: transformedData.dueDate,
-          raw_due_date: projectData.due_date
-        });
+        console.log('Final transformed data due_date:', transformedData.due_date);
+        console.log('Final transformed data dueDate:', transformedData.dueDate);
 
         return transformedData;
       } catch (error) {
@@ -173,9 +188,7 @@ export default function ProjectDetails() {
         throw error;
       }
     },
-    // Add these options for better data handling
-    refetchOnWindowFocus: true,
-    staleTime: 300000 // 5 minutes
+    staleTime: 60000 // 1 minute
   });
 
   // Add note mutation
@@ -558,23 +571,7 @@ export default function ProjectDetails() {
               <div className="text-sm flex items-center justify-between">
                 <div>
                   <span className="font-medium">Due:</span>{" "}
-                  {(() => {
-                    console.log("Due date debug:", {
-                      due_date_direct: project.due_date,
-                      dueDate_direct: project.dueDate
-                    });
-
-                    const dateValue = project.due_date || project.dueDate;
-                    if (!dateValue) return "Not set";
-
-                    try {
-                      const date = new Date(dateValue);
-                      return date.toLocaleDateString();
-                    } catch (e) {
-                      console.error("Date formatting error:", e);
-                      return "Date error";
-                    }
-                  })()}
+                  {formatDate(project.due_date)}
                 </div>
 
                 {/* Calendar popover for date selection */}
@@ -589,11 +586,7 @@ export default function ProjectDetails() {
                     <PopoverContent className="w-auto p-0" align="end">
                       <CalendarComponent
                         mode="single"
-                        selected={(() => {
-                          const dateValue = project.due_date || project.dueDate;
-                          if (!dateValue) return undefined;
-                          return new Date(dateValue);
-                        })()}
+                        selected={project.due_date ? new Date(project.due_date) : undefined}
                         onSelect={(date) => {
                           if (date) {
                             console.log("Date selected in calendar:", date);

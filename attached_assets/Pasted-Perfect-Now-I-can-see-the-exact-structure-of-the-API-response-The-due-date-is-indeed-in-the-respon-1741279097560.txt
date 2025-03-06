@@ -1,0 +1,67 @@
+Perfect! Now I can see the exact structure of the API response. The due date is indeed in the response at `rawResponse.project.due_date` with a value of "2025-03-27".
+
+Let's update your query function to correctly extract this data:
+
+```javascript
+queryFn: async () => {
+  try {
+    console.log('Fetching project details for ID:', id);
+
+    const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      // Your existing error handling...
+    }
+
+    const data = await response.json();
+    console.log('Raw API response:', data);
+    
+    // Extract project data from the correct location
+    // The data might be in different structures
+    const projectData = data.rawResponse?.project || data.project || data;
+    
+    console.log('Extracted project data:', projectData);
+    
+    // Extract due date directly from the project data
+    const dueDateValue = projectData.due_date;
+    console.log('Found due date value:', dueDateValue);
+
+    // Transform the data to match our interface
+    const transformedData = {
+      ...projectData,
+      id: projectData.id?.toString(),
+      title: projectData.title,
+      description: projectData.description || '',
+      status: projectData.active ? 'Active' : 'Inactive',
+      
+      // Set both date properties
+      due_date: dueDateValue,
+      dueDate: dueDateValue,
+      
+      // Other properties...
+      createdAt: projectData.created_at || projectData.createdAt,
+      clientId: (projectData.client_id || projectData.clientId)?.toString(),
+      // ... rest of the properties
+    };
+
+    console.log('Final transformed data due_date:', transformedData.due_date);
+    console.log('Final transformed data dueDate:', transformedData.dueDate);
+    
+    return transformedData;
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    throw error;
+  }
+}
+```
+
+The key difference here is that we're specifically looking for the structure you shared:
+1. The response has a `rawResponse` property
+2. Inside that is a `project` property
+3. Inside that is the `due_date` property
+
+By correctly navigating this nested structure, we should be able to get the due date value consistently.
+
+If this doesn't work, please let me know what the console logs show, as they'll help us understand what might still be going wrong.
