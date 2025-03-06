@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Calendar, DollarSign, AlertTriangle, Trash2, Pencil } from "lucide-react";
+import { Loader2, Calendar, DollarSign, AlertTriangle, Trash2, Pencil, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -119,6 +119,23 @@ export default function ProjectDetails() {
   const [isEditingFinancial, setIsEditingFinancial] = useState(false);
   const [budget, setBudget] = useState<number | undefined>(undefined);
   const [fixedPrice, setFixedPrice] = useState<number | undefined>(undefined);
+  const [showBudget, setShowBudget] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`project_budget_visible_${id}`);
+      return saved ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
+
+  // Effect to save budget visibility preference
+  useEffect(() => {
+    try {
+      localStorage.setItem(`project_budget_visible_${id}`, JSON.stringify(showBudget));
+    } catch (e) {
+      console.error('Error saving budget visibility preference:', e);
+    }
+  }, [showBudget, id]);
 
   // Effect to initialize from localStorage when component mounts
   useEffect(() => {
@@ -703,26 +720,50 @@ export default function ProjectDetails() {
                   <DollarSign className="h-5 w-5 mr-2" />
                   Financial Details
                 </CardTitle>
-                {isAdmin && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditingFinancial(true)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setShowBudget(!showBudget)}
+                        title={showBudget ? "Hide Budget" : "Show Budget"}
+                      >
+                        {showBudget ? (
+                          <Eye className="h-4 w-4" />
+                        ) : (
+                          <EyeOff className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setIsEditingFinancial(true)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="text-sm space-y-2">
                 {isEditingFinancial ? (
                   <>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">Budget:</span>
-                      <Input
-                        type="number"
-                        defaultValue={budget?.toString() || ""}
-                        onChange={(e) => setBudget(parseFloat(e.target.value))}
-                        className="w-32"
-                      />
-                    </div>
+                    {showBudget && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Budget:</span>
+                        <Input
+                          type="number"
+                          defaultValue={budget?.toString() || ""}
+                          onChange={(e) => setBudget(parseFloat(e.target.value))}
+                          className="w-32"
+                        />
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <span className="font-medium">Fixed Price:</span>
                       <Input
@@ -755,10 +796,18 @@ export default function ProjectDetails() {
                     </div>
                   </>
                 ) : (
-                  <div>
-                    <span className="font-medium">Fixed Price:</span>{" "}
-                    ${fixedPrice ? fixedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
-                  </div>
+                  <>
+                    {showBudget && (
+                      <div>
+                        <span className="font-medium">Budget:</span>{" "}
+                        ${budget ? (budget).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                      </div>
+                    )}
+                    <div>
+                      <span className="font-medium">Fixed Price:</span>{" "}
+                      ${fixedPrice ? fixedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
+                    </div>
+                  </>
                 )}
               </div>
             </CardContent>
