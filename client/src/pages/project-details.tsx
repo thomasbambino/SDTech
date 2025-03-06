@@ -251,39 +251,44 @@ export default function ProjectDetails() {
         date: formattedDate
       });
 
-      // Use the correct API endpoint structure
+      // Create a request that exactly mimics what EditProjectDialog does
+      // Include all the necessary project data
       const response = await fetch(`/api/freshbooks/projects/${id}`, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         credentials: 'include',
         body: JSON.stringify({
           project: {
-            due_date: formattedDate
+            title: project.title,
+            description: project.description || '',
+            due_date: formattedDate,
+            client_id: project.clientId,
+            // Include these only if they exist in the project
+            fixed_price: project.fixedPrice,
+            budget: project.budget
           }
-        })
+        }),
       });
 
       if (!response.ok) {
+        console.error('Response status:', response.status);
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update due date');
+        console.error('Error data:', errorData);
+        throw new Error(errorData.details || errorData.error || 'Failed to update project');
       }
 
       return response.json();
     },
     onSuccess: () => {
-      // Update both query patterns to ensure all data is refreshed
-      queryClient.invalidateQueries({
-        queryKey: ['/api/freshbooks/projects']
+      // Follow the exact pattern from EditProjectDialog
+      queryClient.invalidateQueries({ queryKey: ['/api/freshbooks/projects'] });
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/freshbooks/clients', project.clientId, 'projects']
       });
 
-      // Also invalidate client projects query
-      queryClient.invalidateQueries({
-        queryKey: ['/api/freshbooks/clients', project?.clientId, 'projects']
-      });
-
-      // Invalidate the specific project query pattern used in ProjectDetails
+      // Also invalidate the specific query used in this component
       queryClient.invalidateQueries({
         queryKey: ['/api/freshbooks/clients', id, 'projects', id]
       });
@@ -298,7 +303,7 @@ export default function ProjectDetails() {
       console.error("Error updating due date:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update due date. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to update project",
         variant: "destructive",
       });
     }

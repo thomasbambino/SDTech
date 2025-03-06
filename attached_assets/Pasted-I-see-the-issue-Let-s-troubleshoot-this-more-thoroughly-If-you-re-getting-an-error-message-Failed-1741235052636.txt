@@ -1,0 +1,141 @@
+I see the issue. Let's troubleshoot this more thoroughly. If you're getting an error message "Failed to update project," we need to debug what's happening when you try to update the due date.
+
+First, let's examine the error handling in more detail. In your current code:
+
+1. The error message is coming from the `onError` handler in the `updateDueDateMutation`
+2. There might be more detailed error information in the response that we're not capturing properly
+
+Let's approach this in two parts:
+
+1. Debug the current issues (error message and not seeing the current due date)
+2. Fix the implementation
+
+### Part 1: Debugging
+
+First, let's add better logging to understand what's happening:
+
+```javascript
+// Inside updateDueDateMutation's mutationFn
+console.log('Sending PUT request to:', `/api/freshbooks/projects/${id}`);
+console.log('Request body:', JSON.stringify({
+  project: {
+    due_date: formattedDate
+  }
+}));
+
+// And in the error handling
+if (!response.ok) {
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    const errorData = await response.json();
+    console.error('Error response body:', errorData);
+    throw new Error(errorData.error || errorData.details || errorData.message || 'Failed to update due date');
+  } else {
+    const errorText = await response.text();
+    console.error('Error response text:', errorText);
+    throw new Error(`Server error: ${response.status} - ${errorText.slice(0, 100)}`);
+  }
+}
+```
+
+### Part 2: Fixing the Implementation
+
+Since we've tried multiple approaches and the issue persists, let's take a completely different approach by directly using the `EditProjectDialog` component as a reference:
+
+```javascript
+const updateDueDateMutation = useMutation({
+  mutationFn: async (date: Date) => {
+    // Format date as YYYY-MM-DD
+    const formattedDate = date.toISOString().split('T')[0];
+    
+    console.log('Updating due date for project ID:', id);
+    
+    // Create a request that exactly mimics what EditProjectDialog does
+    // Include all the necessary project data
+    const response = await fetch(`/api/freshbooks/projects/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        project: {
+          title: project.title,
+          description: project.description || '',
+          due_date: formattedDate,
+          client_id: project.clientId,
+          // Include these only if they exist in the project
+          fixed_price: project.fixedPrice,
+          budget: project.budget
+        }
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error('Response status:', response.status);
+      const errorData = await response.json();
+      console.error('Error data:', errorData);
+      throw new Error(errorData.details || errorData.error || 'Failed to update project');
+    }
+    
+    return response.json();
+  },
+  onSuccess: () => {
+    // Follow the exact pattern from EditProjectDialog
+    queryClient.invalidateQueries({ queryKey: ['/api/freshbooks/projects'] });
+    queryClient.invalidateQueries({ 
+      queryKey: ['/api/freshbooks/clients', project.clientId, 'projects']
+    });
+    
+    // Also invalidate the specific query used in this component
+    queryClient.invalidateQueries({
+      queryKey: ['/api/freshbooks/clients', id, 'projects', id]
+    });
+    
+    toast({
+      title: "Success",
+      description: "Due date updated successfully",
+    });
+    setIsEditingDueDate(false);
+  },
+  onError: (error) => {
+    console.error("Error updating due date:", error);
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to update project",
+      variant: "destructive",
+    });
+  }
+});
+```
+
+For the issue of not seeing the current due date, let's improve the date display logic:
+
+```jsx
+{/* In your JSX */}
+<div className="text-sm flex items-center justify-between">
+  <div>
+    <span className="font-medium">Due:</span>{" "}
+    {project.dueDate ? new Date(project.dueDate).toLocaleDateString() : "Not set"}
+  </div>
+  {/* ... rest of the code */}
+</div>
+```
+
+Lastly, there could be an issue with how the date is passed to the `CalendarComponent`. Make sure it's properly parsing the date:
+
+```jsx
+<CalendarComponent
+  mode="single"
+  selected={project.dueDate ? new Date(project.dueDate) : undefined}
+  onSelect={(date) => {
+    if (date) {
+      console.log("Selected date:", date);
+      updateDueDateMutation.mutate(date);
+    }
+  }}
+  initialFocus
+/>
+```
+
+These changes should help diagnose and resolve the issue. The key here is to closely match the request format from the working `EditProjectDialog` component, add better error handling and logging, and ensure the date display is consistent.
