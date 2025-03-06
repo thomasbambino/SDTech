@@ -129,8 +129,8 @@ export default function ProjectDetails() {
   });
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
-  const [editedTitle, setEditedTitle] = useState(project?.title || '');
-  const [editedDescription, setEditedDescription] = useState(project?.description || '');
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedDescription, setEditedDescription] = useState('');
 
   // Effect to save budget visibility preference
   useEffect(() => {
@@ -141,19 +141,17 @@ export default function ProjectDetails() {
     }
   }, [showBudget, id]);
 
-  // Effect to initialize from localStorage when component mounts
+  // Effect to initialize form values when project data is available
   useEffect(() => {
-    try {
-      // Try to load from localStorage first
-      const savedDate = localStorage.getItem(`project_due_date_${id}`);
-      if (savedDate) {
-        console.log('Loaded due date from localStorage:', savedDate);
-        setLocalDueDate(savedDate);
-      }
-    } catch (e) {
-      console.error('Error accessing localStorage:', e);
+    if (project) {
+      setEditedTitle(project.title);
+      setEditedDescription(project.description || '');
+      setBudget(project.budget ? project.budget / 100 : 0);
+      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
+        parseFloat(project.fixedPrice?.toString() || '0'));
     }
-  }, [id]);
+  }, [project]);
+
 
   // Fetch project details
   const {
@@ -562,6 +560,7 @@ export default function ProjectDetails() {
         parseFloat(project.fixedPrice?.toString() || '0'));
     }
   }, [project]);
+
 
 
   if (projectLoading) {
