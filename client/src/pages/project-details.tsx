@@ -640,32 +640,10 @@ export default function ProjectDetails() {
                   </Badge>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                Project Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
               {project.billingMethod && (
                 <div className="text-sm">
                   <span className="font-medium">Billing Method:</span>{" "}
                   {project.billingMethod}
-                </div>
-              )}
-              {project.projectType && (
-                <div className="text-sm">
-                  <span className="font-medium">Type:</span>{" "}
-                  {project.projectType}
-                </div>
-              )}
-              {project.billedStatus && (
-                <div className="text-sm">
-                  <span className="font-medium">Status:</span>{" "}
-                  <Badge>{project.billedStatus}</Badge>
                 </div>
               )}
             </CardContent>
