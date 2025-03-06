@@ -123,17 +123,12 @@ const useProjectCache = (projectId: string) => {
   const updateCache = useCallback((newData: Partial<FreshbooksProject>) => {
     setCachedProject(prevData => {
       if (!prevData) return newData as FreshbooksProject;
-
-      // Merge old and new data
       const merged = { ...prevData, ...newData };
-
-      // Save to localStorage
       try {
         localStorage.setItem(`project_data_${projectId}`, JSON.stringify(merged));
       } catch (e) {
         console.error('Error saving to localStorage:', e);
       }
-
       return merged;
     });
   }, [projectId]);
@@ -148,7 +143,22 @@ export default function ProjectDetails() {
   const [newNote, setNewNote] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isEditingDueDate, setIsEditingDueDate] = useState(false);
-  const [localDueDate, setLocalDueDate] = useState<string | null>(null);
+  const [localDueDate, setLocalDueDate] = useState<string | null>(() => {
+    try {
+      const savedDate = localStorage.getItem(`project_due_date_${id}`);
+      if (savedDate) {
+        console.log('Loaded due date from localStorage:', savedDate);
+        return savedDate;
+      }
+      // Fallback to cached project data if available
+      if (cachedProject?.due_date) {
+        return cachedProject.due_date;
+      }
+    } catch (e) {
+      console.error('Error accessing localStorage:', e);
+    }
+    return null;
+  });
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isCustomer = user?.role === 'customer';
@@ -356,13 +366,17 @@ export default function ProjectDetails() {
   // Update due date mutation
   const updateDueDateMutation = useMutation({
     mutationFn: async (date: Date) => {
-      // Format date as YYYY-MM-DD
       const formattedDate = date.toISOString().split('T')[0];
 
-      console.log('Updating due date:', {
-        projectId: id,
-        date: formattedDate
-      });
+      // Update both cache and localStorage
+      updateCache({ due_date: formattedDate, dueDate: formattedDate });
+
+      try {
+        localStorage.setItem(`project_due_date_${id}`, formattedDate);
+        console.log('Saved due date to localStorage:', formattedDate);
+      } catch (e) {
+        console.error('Error saving to localStorage:', e);
+      }
 
       const response = await fetch(`/api/freshbooks/projects/${id}`, {
         method: 'PUT',
@@ -381,30 +395,24 @@ export default function ProjectDetails() {
       });
 
       if (!response.ok) {
-        console.error('Response status:', response.status);
         const errorData = await response.json();
-        console.error('Error data:', errorData);
         throw new Error(errorData.details || errorData.error || 'Failed to update project');
       }
 
-      const responseData = await response.json();
-      console.log('Update response:', responseData);
-      return responseData;
+      return response.json();
     },
     onSuccess: (responseData, dateVariable) => {
-      // Format as YYYY-MM-DD
       const formattedDate = dateVariable.toISOString().split('T')[0];
-
-      // Store in React state
       setLocalDueDate(formattedDate);
 
-      // Also persist to localStorage
-      try {
-        localStorage.setItem(`project_due_date_${id}`, formattedDate);
-        console.log('Saved due date to localStorage:', formattedDate);
-      } catch (e) {
-        console.error('Error saving to localStorage:', e);
-      }
+      // Update query cache with new date
+      queryClient.setQueryData(
+        ["/api/freshbooks/clients", id, "projects", id],
+        (oldData: any) => {
+          if (!oldData) return cachedProject;
+          return { ...oldData, due_date: formattedDate, dueDate: formattedDate };
+        }
+      );
 
       toast({
         title: "Success",
@@ -946,8 +954,7 @@ export default function ProjectDetails() {
                         <Input
                           type="number"
                           defaultValue={budget?.toString() || ""}
-                          onChange={(e) => setBudget(parseFloat(e.target.value))}
-                          className="w-32"
+                          onChange={(e) => setBudget(parseFloat(e.target.value))}                          className="w-32"
                         />
                       </div>
                     )}
