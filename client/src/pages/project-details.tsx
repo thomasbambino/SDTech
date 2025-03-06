@@ -116,6 +116,9 @@ export default function ProjectDetails() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isCustomer = user?.role === 'customer';
+  const [isEditingFinancial, setIsEditingFinancial] = useState(false);
+  const [tempFixedPrice, setTempFixedPrice] = useState(false); // Initialize to false or the project's initial value
+
 
   // Effect to initialize from localStorage when component mounts
   useEffect(() => {
@@ -404,6 +407,59 @@ export default function ProjectDetails() {
     refetchOnWindowFocus: true
   });
 
+  const updateFinancialMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/freshbooks/projects/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          project: {
+            ...project,
+            fixed_price: tempFixedPrice ? "Yes" : "No"
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Failed to update project');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/freshbooks/clients", id, "projects", id]
+      });
+      setIsEditingFinancial(false);
+      toast({
+        title: "Success",
+        description: "Financial details updated successfully",
+      });
+    },
+    onError: (error) => {
+      console.error("Error updating financial details:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update project",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const updateFinancialDetails = () => {
+    updateFinancialMutation.mutate();
+  };
+
+  useEffect(() => {
+    if (project) {
+      setTempFixedPrice(typeof project.fixedPrice === 'boolean' ? project.fixedPrice : project.fixedPrice === 'Yes');
+    }
+  }, [project]);
+
   if (projectLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -614,10 +670,17 @@ export default function ProjectDetails() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <DollarSign className="h-5 w-5 mr-2" />
-                Financial Details
-              </CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle className="flex items-center">
+                  <DollarSign className="h-5 w-5 mr-2" />
+                  Financial Details
+                </CardTitle>
+                {isAdmin && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditingFinancial(true)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-2">
               {project.budget && (
@@ -632,14 +695,46 @@ export default function ProjectDetails() {
                   ${Number(project.billedAmount).toLocaleString()}
                 </div>
               )}
-              {project.fixedPrice !== undefined && (
-                <div className="text-sm">
+              <div className="text-sm flex items-center justify-between">
+                <div>
                   <span className="font-medium">Fixed Price:</span>{" "}
-                  <Badge variant={isFixedPrice ? "default" : "secondary"}>
-                    {isFixedPrice ? "Yes" : "No"}
-                  </Badge>
+                  {isEditingFinancial ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTempFixedPrice(!tempFixedPrice)}
+                      className="ml-2"
+                    >
+                      {tempFixedPrice ? "Yes" : "No"}
+                    </Button>
+                  ) : (
+                    <Badge variant={isFixedPrice ? "default" : "secondary"}>
+                      {isFixedPrice ? "Yes" : "No"}
+                    </Badge>
+                  )}
                 </div>
-              )}
+                {isEditingFinancial && (
+                  <div className="space-x-2">
+                    <Button
+                      size="sm"
+                      onClick={() => updateFinancialDetails()}
+                      disabled={updateFinancialMutation.isPending}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setIsEditingFinancial(false);
+                        setTempFixedPrice(isFixedPrice);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
               {project.billingMethod && (
                 <div className="text-sm">
                   <span className="font-medium">Billing Method:</span>{" "}
