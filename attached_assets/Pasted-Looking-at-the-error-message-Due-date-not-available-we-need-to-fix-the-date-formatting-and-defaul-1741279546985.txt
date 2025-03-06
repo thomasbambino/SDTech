@@ -1,0 +1,77 @@
+Looking at the error message "Due date not available," we need to fix the date formatting and default fallback values. Let's update both your formatting function and the date display:
+
+1. First, let's update your `formatDate` function:
+
+```javascript
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) {
+    console.log('No date string provided to formatDate');
+    return 'Not set';  // Changed from 'Date not available'
+  }
+  try {
+    console.log('Formatting date string:', dateString);
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date string:', dateString);
+      return 'Invalid date';
+    }
+    return date.toLocaleDateString();
+  } catch (error) {
+    console.error('Error formatting date:', error, 'Date string:', dateString);
+    return 'Date error';
+  }
+};
+```
+
+2. Next, in your date card component, simplify the due date display:
+
+```jsx
+<div className="text-sm flex items-center justify-between">
+  <div>
+    <span className="font-medium">Due:</span>{" "}
+    {(() => {
+      // Get the date value, with explicit console logging
+      const dateValue = project.due_date || project.dueDate;
+      console.log('Date value for display:', dateValue, 'type:', typeof dateValue);
+      
+      // Simple check and format
+      if (!dateValue) return "Not set";
+      
+      try {
+        return new Date(dateValue).toLocaleDateString();
+      } catch (e) {
+        console.error('Error formatting date for display:', e);
+        return "Not set";
+      }
+    })()}
+  </div>
+  {/* ... rest of the component ... */}
+</div>
+```
+
+3. Additionally, add a React state to persist the date once set:
+
+```javascript
+// At the top of your component
+const [persistedDueDate, setPersistedDueDate] = useState<string | null>(null);
+
+// In your updateDueDateMutation's onSuccess handler
+onSuccess: (responseData, dateVariable) => {
+  const formattedDate = dateVariable.toISOString().split('T')[0];
+  
+  // Save to state for immediate use
+  setPersistedDueDate(formattedDate);
+  
+  // Rest of your code...
+}
+
+// Then in your JSX
+const dateValue = project.due_date || project.dueDate || persistedDueDate;
+```
+
+This approach should:
+1. Change the "Date not available" message to "Not set"
+2. Simplify the date formatting to reduce potential errors
+3. Use a React state to persist the date even if the API response doesn't include it
+
+Let me know if this helps resolve the issue!

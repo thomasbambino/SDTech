@@ -79,19 +79,19 @@ interface FreshbooksProject {
 const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) {
     console.log('No date string provided to formatDate');
-    return 'Date not available';
+    return 'Not set';  // Changed from 'Date not available'
   }
   try {
     console.log('Formatting date string:', dateString);
     const date = new Date(dateString);
     if (isNaN(date.getTime())) {
       console.error('Invalid date string:', dateString);
-      return 'Invalid date';
+      return 'Not set';  // Changed from 'Invalid date'
     }
     return date.toLocaleDateString();
   } catch (error) {
     console.error('Error formatting date:', error, 'Date string:', dateString);
-    return 'Date not available';
+    return 'Not set';  // Changed from 'Date error'
   }
 };
 
@@ -564,7 +564,7 @@ export default function ProjectDetails() {
               {/* Created date */}
               <div className="text-sm">
                 <span className="font-medium">Created:</span>{" "}
-                {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : "Not available"}
+                {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : "Not set"}
               </div>
 
               {/* Due date - completely rewritten */}
