@@ -597,16 +597,6 @@ export default function ProjectDetails() {
           </div>
         </div>
 
-        {/* Project Description */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Project Description</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap">{project.description || 'No description provided'}</p>
-          </CardContent>
-        </Card>
-
         {/* Progress Section */}
         <Card className="mb-6">
           <CardHeader>
@@ -643,6 +633,16 @@ export default function ProjectDetails() {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Project Description */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Project Description</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="whitespace-pre-wrap">{project.description || 'No description provided'}</p>
           </CardContent>
         </Card>
 
