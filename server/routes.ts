@@ -909,7 +909,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { clientId, projectId } = req.params;
       const { project } = req.body;
 
-      console.log('Updating project due date in Freshbooks:', { clientId, projectId, project });
+      console.log('Updating project due date in Freshbooks:', { 
+        clientId, 
+        projectId, 
+        project,
+        requestBody: req.body 
+      });
 
       const accessToken = getFreshbooksToken(req);
       if (!accessToken) {
@@ -969,12 +974,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (!fbResponse.ok) {
+        const responseText = await fbResponse.text();
         console.error('Failed to update project in Freshbooks:', {
           status: fbResponse.status,
           statusText: fbResponse.statusText,
-          text: await fbResponse.text()
+          responseBody: responseText
         });
-        throw new Error(`Failed to update project: ${fbResponse.status}`);
+        throw new Error(`Failed to update project: ${fbResponse.status} - ${responseText}`);
       }
 
       const responseData = await fbResponse.json();
