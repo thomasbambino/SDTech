@@ -417,8 +417,10 @@ export default function ProjectDetails() {
         credentials: 'include',
         body: JSON.stringify({
           project: {
-            ...project,
-            fixed_price: tempFixedPrice ? "Yes" : "No"
+            title: project?.title,
+            description: project?.description || '',
+            fixed_price: tempFixedPrice ? "600.00" : "0.00", // Set proper decimal value
+            client_id: project?.clientId
           }
         }),
       });
