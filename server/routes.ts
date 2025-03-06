@@ -976,19 +976,27 @@ app.get("/api/freshbooks/clients", async (req, res) => {
       });
 
       if (!meResponse.ok) {
+        console.error('Failed to get account details:', {
+          status: meResponse.status,
+          statusText: meResponse.statusText,
+          text: await meResponse.text()
+        });
         throw new Error(`Failed to get account details: ${meResponse.status}`);
       }
 
       const meData = await meResponse.json();
-      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
 
-      if (!businessId) {
-        throw new Error("No business ID found in profile");
+      if (!accountId) {
+        console.error('No account ID found in profile response', meData);
+        throw new Error("No account ID found in profile");
       }
 
-      // Update project in Freshbooks
+      console.log('Using account ID:', accountId);
+
+      // Update project in Freshbooks using accounting API  
       const fbResponse = await fetch(
-        `https://api.freshbooks.com/projects/business/${businessId}/projects/${projectId}`,
+        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
         {
           method: 'PUT',
           headers: {
@@ -997,7 +1005,7 @@ app.get("/api/freshbooks/clients", async (req, res) => {
           },
           body: JSON.stringify({
             project: {
-              due_date
+              due_date: due_date
             }
           })
         }
@@ -1013,9 +1021,14 @@ app.get("/api/freshbooks/clients", async (req, res) => {
       }
 
       const updatedProject = await fbResponse.json();
+      console.log('Successfully updated project:', updatedProject);
       res.json(updatedProject);
     } catch (error) {
-      console.error('Error updating project:', error);
+      console.error('Error updating project:', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       res.status(500).json({
         error: "Failed to update project", 
         details: error instanceof Error ? error.message : String(error)

@@ -243,6 +243,11 @@ export default function ProjectDetails() {
   // Add due date update mutation
   const updateDueDateMutation = useMutation({
     mutationFn: async (date: Date) => {
+      console.log('Updating due date:', {
+        projectId: id,
+        date: date.toISOString()
+      });
+
       const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
         method: 'PATCH',
         headers: {
@@ -250,12 +255,13 @@ export default function ProjectDetails() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          due_date: format(date, 'yyyy-MM-dd')
+          due_date: date.toISOString().split('T')[0] // Format: YYYY-MM-DD
         })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update due date');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update due date');
       }
 
       return response.json();
@@ -274,7 +280,7 @@ export default function ProjectDetails() {
       console.error("Error updating due date:", error);
       toast({
         title: "Error",
-        description: "Failed to update due date. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to update due date. Please try again.",
         variant: "destructive",
       });
     }
