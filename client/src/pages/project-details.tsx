@@ -117,7 +117,6 @@ export default function ProjectDetails() {
   const isAdmin = user?.role === 'admin';
   const isCustomer = user?.role === 'customer';
   const [isEditingFinancial, setIsEditingFinancial] = useState(false);
-  const [tempFixedPrice, setTempFixedPrice] = useState<boolean | number>(false); // Initialize to false or the project's initial value
   const [budget, setBudget] = useState<number | undefined>(undefined);
   const [fixedPrice, setFixedPrice] = useState<number | undefined>(undefined);
 
@@ -455,6 +454,14 @@ export default function ProjectDetails() {
     }
   });
 
+  // Update effect to initialize financial values
+  useEffect(() => {
+    if (project) {
+      setBudget(project.budget);
+      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 : parseFloat(project.fixedPrice?.toString() || '0'));
+    }
+  }, [project]);
+
   const updateFinancialDetails = () => {
     updateFinancialMutation.mutate();
   };
@@ -462,8 +469,8 @@ export default function ProjectDetails() {
   useEffect(() => {
     if (project) {
       setBudget(project.budget);
-      setFixedPrice(typeof project.fixedPrice === 'boolean' ? (project.fixedPrice ? 1 : 0) : parseFloat(project.fixedPrice));
-      setTempFixedPrice(typeof project.fixedPrice === 'boolean' ? project.fixedPrice : project.fixedPrice === 'Yes');
+      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 : parseFloat(project.fixedPrice?.toString() || '0'));
+
     }
   }, [project]);
 
@@ -536,7 +543,7 @@ export default function ProjectDetails() {
   }
 
   const currentStage = getStageFromProgress(project.progress || 0);
-  const isFixedPrice = typeof project.fixedPrice === 'boolean' ? project.fixedPrice : project.fixedPrice === 'Yes';
+
 
   console.log("Project data right before render:", {
     id: project.id,
@@ -697,7 +704,7 @@ export default function ProjectDetails() {
                       <span className="font-medium">Budget:</span>
                       <Input
                         type="number"
-                        defaultValue={project.budget ? project.budget.toString() : ""}
+                        defaultValue={budget?.toString() || ""}
                         onChange={(e) => setBudget(parseFloat(e.target.value))}
                         className="w-32"
                       />
@@ -706,7 +713,7 @@ export default function ProjectDetails() {
                       <span className="font-medium">Fixed Price:</span>
                       <Input
                         type="number"
-                        defaultValue={fixedPrice ? fixedPrice.toString() : ""}
+                        defaultValue={fixedPrice?.toString() || ""}
                         onChange={(e) => setFixedPrice(parseFloat(e.target.value))}
                         className="w-32"
                       />
@@ -714,7 +721,7 @@ export default function ProjectDetails() {
                     <div className="space-x-2 mt-4">
                       <Button
                         size="sm"
-                        onClick={() => updateFinancialDetails()}
+                        onClick={() => updateFinancialMutation.mutate()}
                         disabled={updateFinancialMutation.isPending}
                       >
                         Save
@@ -724,6 +731,8 @@ export default function ProjectDetails() {
                         size="sm"
                         onClick={() => {
                           setIsEditingFinancial(false);
+                          setBudget(project?.budget);
+                          setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 : parseFloat(project.fixedPrice?.toString() || '0'));
                         }}
                       >
                         Cancel
@@ -732,18 +741,14 @@ export default function ProjectDetails() {
                   </>
                 ) : (
                   <>
-                    {project.budget && (
-                      <div>
-                        <span className="font-medium">Budget:</span>{" "}
-                        ${Number(project.budget).toLocaleString()}
-                      </div>
-                    )}
-                    {project.fixedPrice && (
-                      <div>
-                        <span className="font-medium">Fixed Price:</span>{" "}
-                        {typeof project.fixedPrice === 'boolean' ? (project.fixedPrice ? "Yes" : "No") : project.fixedPrice}
-                      </div>
-                    )}
+                    <div>
+                      <span className="font-medium">Budget:</span>{" "}
+                      ${budget ? Number(budget).toLocaleString() : "0"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Fixed Price:</span>{" "}
+                      ${fixedPrice ? Number(fixedPrice).toLocaleString() : "0"}
+                    </div>
                   </>
                 )}
               </div>
