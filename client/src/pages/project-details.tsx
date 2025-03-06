@@ -252,7 +252,7 @@ export default function ProjectDetails() {
       });
 
       // Create a request that exactly mimics what EditProjectDialog does
-      // Include all the necessary project data
+      // Include only the necessary project data
       const response = await fetch(`/api/freshbooks/projects/${id}`, {
         method: 'PUT',
         headers: {
@@ -264,10 +264,8 @@ export default function ProjectDetails() {
             title: project.title,
             description: project.description || '',
             due_date: formattedDate,
-            client_id: project.clientId,
-            // Include these only if they exist in the project
-            fixed_price: project.fixedPrice,
-            budget: project.budget
+            client_id: project.clientId
+            // Omit fixed_price and budget to avoid validation errors
           }
         }),
       });
