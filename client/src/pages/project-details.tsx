@@ -278,6 +278,7 @@ export default function ProjectDetails() {
   // Update due date mutation
   const updateDueDateMutation = useMutation({
     mutationFn: async (date: Date) => {
+      // Format date as YYYY-MM-DD
       const formattedDate = date.toISOString().split('T')[0];
 
       console.log('Updating due date:', {
@@ -308,27 +309,23 @@ export default function ProjectDetails() {
         throw new Error(errorData.details || errorData.error || 'Failed to update project');
       }
 
-      return response.json();
+      const responseData = await response.json();
+      console.log('Update response:', responseData);
+      return responseData;
     },
-    onSuccess: (data, variables) => {
-      // Store the date for direct update
-      const updatedDate = variables.toISOString().split('T')[0];
+    onSuccess: (responseData, dateVariable) => {
+      // Update the UI directly with our own updated object
+      const updatedProject = {
+        ...project,
+        due_date: dateVariable.toISOString().split('T')[0],
+        dueDate: dateVariable.toISOString().split('T')[0]
+      };
 
-      // Immediately update the UI with the new date without refetching
+      // Set this directly in the query cache
       queryClient.setQueryData(
         ["/api/freshbooks/clients", id, "projects", id],
-        (oldData) => {
-          if (!oldData) return oldData;
-
-          return {
-            ...oldData,
-            due_date: updatedDate,
-            dueDate: updatedDate
-          };
-        }
+        updatedProject
       );
-
-      // Don't invalidate queries yet - this avoids the race condition
 
       toast({
         title: "Success",
@@ -336,18 +333,13 @@ export default function ProjectDetails() {
       });
       setIsEditingDueDate(false);
 
-      // Schedule invalidation for later to ensure server consistency
+      // Delay refreshing other data
       setTimeout(() => {
-        queryClient.invalidateQueries({
-          queryKey: ['/api/freshbooks/projects']
-        });
+        queryClient.invalidateQueries({ queryKey: ['/api/freshbooks/projects'] });
         queryClient.invalidateQueries({
           queryKey: ['/api/freshbooks/clients', project?.clientId, 'projects']
         });
-        queryClient.invalidateQueries({
-          queryKey: ['/api/freshbooks/clients', id, 'projects', id]
-        });
-      }, 500);
+      }, 2000);
     },
     onError: (error) => {
       console.error("Error updating due date:", error);
@@ -546,7 +538,7 @@ export default function ProjectDetails() {
               <div className="flex justify-between items-center">
                 <CardTitle className="flex items-center">
                   <Calendar className="h-5 w-5 mr-2" />
-                  Dates
+                  Project Timeline
                 </CardTitle>
                 {isAdmin && (
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditingDueDate(true)}>
@@ -556,66 +548,55 @@ export default function ProjectDetails() {
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
+              {/* Created date */}
               <div className="text-sm">
                 <span className="font-medium">Created:</span>{" "}
-                {formatDate(project.createdAt?.toString())}
+                {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : "Not available"}
               </div>
+
+              {/* Due date - completely rewritten */}
               <div className="text-sm flex items-center justify-between">
                 <div>
                   <span className="font-medium">Due:</span>{" "}
                   {(() => {
-                    console.log("Due date values in JSX:", {
-                      due_date: project.due_date,
-                      dueDate: project.dueDate
+                    console.log("Due date debug:", {
+                      due_date_direct: project.due_date,
+                      dueDate_direct: project.dueDate
                     });
 
-                    // Force string conversion and thorough checking
-                    const dueDateValue = String(project.due_date || project.dueDate || '');
-                    console.log("Final due date value:", dueDateValue);
-
-                    if (!dueDateValue || dueDateValue === 'undefined' || dueDateValue === 'null') {
-                      return "Not set";
-                    }
+                    const dateValue = project.due_date || project.dueDate;
+                    if (!dateValue) return "Not set";
 
                     try {
-                      // Directly create a date to display
-                      const dateObj = new Date(dueDateValue);
-                      if (isNaN(dateObj.getTime())) {
-                        console.error("Invalid date value:", dueDateValue);
-                        return "Invalid date";
-                      }
-                      return dateObj.toLocaleDateString();
-                    } catch (err) {
-                      console.error("Error formatting date:", err);
+                      const date = new Date(dateValue);
+                      return date.toLocaleDateString();
+                    } catch (e) {
+                      console.error("Date formatting error:", e);
                       return "Date error";
                     }
                   })()}
                 </div>
+
+                {/* Calendar popover for date selection */}
                 {isEditingDueDate && (
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button variant="outline" size="sm">
                         <Calendar className="h-4 w-4 mr-2" />
-                        Select Date
+                        Change Date
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="end">
                       <CalendarComponent
                         mode="single"
                         selected={(() => {
-                          const dateStr = project.due_date || project.dueDate;
-                          if (!dateStr) return undefined;
-                          try {
-                            const date = new Date(dateStr);
-                            return isNaN(date.getTime()) ? undefined : date;
-                          } catch (err) {
-                            console.error("Error parsing date for calendar:", err);
-                            return undefined;
-                          }
+                          const dateValue = project.due_date || project.dueDate;
+                          if (!dateValue) return undefined;
+                          return new Date(dateValue);
                         })()}
                         onSelect={(date) => {
                           if (date) {
-                            console.log("Selected new date:", date);
+                            console.log("Date selected in calendar:", date);
                             updateDueDateMutation.mutate(date);
                           }
                         }}
@@ -624,6 +605,15 @@ export default function ProjectDetails() {
                     </PopoverContent>
                   </Popover>
                 )}
+              </div>
+
+              {/* Estimated completion */}
+              <div className="text-sm">
+                <span className="font-medium">Est. Completion:</span>{" "}
+                {project.progress === 100 ? "Complete" :
+                  (project.due_date || project.dueDate) ?
+                    `Target: ${new Date(project.due_date || project.dueDate || '').toLocaleDateString()}` :
+                    "Not estimated"}
               </div>
             </CardContent>
           </Card>

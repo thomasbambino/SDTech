@@ -1,0 +1,191 @@
+That's a good approach - let's create a completely new card for the dates section that doesn't rely on the existing code.
+
+To fix the persistent due date issue, let's implement a completely new approach by replacing the date card and updating how we handle date mutations:
+
+## Step 1: Replace the Date Card Component
+
+Replace your existing date card with the new one I've created:
+
+```jsx
+<Card>
+  <CardHeader>
+    <div className="flex justify-between items-center">
+      <CardTitle className="flex items-center">
+        <Calendar className="h-5 w-5 mr-2" />
+        Project Timeline
+      </CardTitle>
+      {isAdmin && (
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsEditingDueDate(true)}>
+          <Pencil className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  </CardHeader>
+  <CardContent className="space-y-2">
+    {/* Created date */}
+    <div className="text-sm">
+      <span className="font-medium">Created:</span>{" "}
+      {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : "Not available"}
+    </div>
+    
+    {/* Due date - completely rewritten */}
+    <div className="text-sm flex items-center justify-between">
+      <div>
+        <span className="font-medium">Due:</span>{" "}
+        {(() => {
+          console.log("Due date debug:", {
+            due_date_direct: project.due_date,
+            dueDate_direct: project.dueDate
+          });
+          
+          const dateValue = project.due_date || project.dueDate;
+          if (!dateValue) return "Not set";
+          
+          try {
+            const date = new Date(dateValue);
+            return date.toLocaleDateString();
+          } catch (e) {
+            console.error("Date formatting error:", e);
+            return "Date error";
+          }
+        })()}
+      </div>
+      
+      {/* Calendar popover for date selection */}
+      {isEditingDueDate && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Calendar className="h-4 w-4 mr-2" />
+              Change Date
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <CalendarComponent
+              mode="single"
+              selected={(() => {
+                const dateValue = project.due_date || project.dueDate;
+                if (!dateValue) return undefined;
+                return new Date(dateValue);
+              })()}
+              onSelect={(date) => {
+                if (date) {
+                  console.log("Date selected in calendar:", date);
+                  updateDueDateMutation.mutate(date);
+                }
+              }}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+      )}
+    </div>
+    
+    {/* Estimated completion */}
+    <div className="text-sm">
+      <span className="font-medium">Est. Completion:</span>{" "}
+      {project.progress === 100 ? "Complete" : 
+        (project.due_date || project.dueDate) ? 
+          `Target: ${new Date(project.due_date || project.dueDate || '').toLocaleDateString()}` : 
+          "Not estimated"}
+    </div>
+  </CardContent>
+</Card>
+```
+
+## Step 2: Update the Due Date Mutation
+
+Then, update your `updateDueDateMutation` with this improved version:
+
+```jsx
+const updateDueDateMutation = useMutation({
+  mutationFn: async (date: Date) => {
+    // Format date as YYYY-MM-DD
+    const formattedDate = date.toISOString().split('T')[0];
+
+    console.log('Updating due date:', {
+      projectId: id,
+      date: formattedDate
+    });
+
+    const response = await fetch(`/api/freshbooks/projects/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        project: {
+          title: project?.title,
+          description: project?.description || '',
+          due_date: formattedDate,
+          client_id: project?.clientId
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('Response status:', response.status);
+      const errorData = await response.json();
+      console.error('Error data:', errorData);
+      throw new Error(errorData.details || errorData.error || 'Failed to update project');
+    }
+
+    const responseData = await response.json();
+    console.log('Update response:', responseData);
+    return responseData;
+  },
+  onSuccess: (responseData, dateVariable) => {
+    // Update the UI directly with our own updated object
+    const updatedProject = {
+      ...project,
+      due_date: dateVariable.toISOString().split('T')[0], 
+      dueDate: dateVariable.toISOString().split('T')[0]
+    };
+    
+    // Set this directly in the query cache
+    queryClient.setQueryData(
+      ["/api/freshbooks/clients", id, "projects", id],
+      updatedProject
+    );
+    
+    toast({
+      title: "Success",
+      description: "Due date updated successfully",
+    });
+    setIsEditingDueDate(false);
+
+    // Delay refreshing other data
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['/api/freshbooks/projects'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/freshbooks/clients', project?.clientId, 'projects']
+      });
+    }, 2000);
+  },
+  onError: (error) => {
+    console.error("Error updating due date:", error);
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to update project",
+      variant: "destructive",
+    });
+  }
+});
+```
+
+## What's Different in This Approach:
+
+1. **The new date card**:
+   - Uses direct date formatting with `new Date().toLocaleDateString()`
+   - Has more thorough error handling
+   - Adds debug logging to see the actual values
+   - Has a cleaner layout with an added estimated completion field
+
+2. **The updated mutation**:
+   - Directly updates the UI without relying on query refetching
+   - Explicitly sets both `due_date` and `dueDate` properties
+   - Delays invalidating queries to prevent race conditions
+   - Provides more detailed logging
+
+This approach should keep the due date visible in the UI after it's been set, since we're directly updating the cache with our own object rather than relying on the refetched data that might have a different structure.
