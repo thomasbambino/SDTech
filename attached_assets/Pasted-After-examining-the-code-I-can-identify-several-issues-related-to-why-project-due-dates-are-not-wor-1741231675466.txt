@@ -1,0 +1,38 @@
+After examining the code, I can identify several issues related to why project due dates are not working properly. Let me break down the main problems:
+
+1. **Inconsistent API Endpoints**: The code is trying to update due dates using different Freshbooks API endpoints in different places. For example:
+
+   - In the `PATCH` endpoint at `/api/freshbooks/clients/:clientId/projects/:projectId`, it's using the accounting API:
+     ```javascript
+     `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`
+     ```
+
+   - But in other places, it's using the projects API:
+     ```javascript
+     `https://api.freshbooks.com/projects/business/${businessId}/project/${req.params.id}`
+     ```
+
+2. **Inconsistent Parameter Formatting**: When updating due dates, the formatting isn't consistent:
+   - Some places are just passing the due_date directly
+   - The structure expected by the Freshbooks API might require a specific date format
+
+3. **Error Handling Issues**: The code attempts to update the due date but doesn't properly handle the response or potential errors from the Freshbooks API.
+
+4. **Multiple Implementations**: There are several redundant implementations of project endpoints, which can lead to confusion about which one is actually being used.
+
+5. **Debugging Information**: While there are debug endpoints for clients and projects, there isn't one specifically for tracking due date updates.
+
+The most likely issue is in the `PATCH` endpoint at `/api/freshbooks/clients/:clientId/projects/:projectId`, where it's trying to update the due date. The error logging shows it's expecting to use the accounting API for a resource that might be accessible only through the projects API.
+
+To fix this, I would recommend:
+
+1. Standardize on using the projects API for all project operations:
+   ```javascript
+   `https://api.freshbooks.com/projects/business/${businessId}/project/${projectId}`
+   ```
+
+2. Ensure the date format is consistent and compatible with Freshbooks' requirements
+   
+3. Add better error handling and logging specifically for due date updates
+
+4. Create a specific debug endpoint to test due date updates and trace the requests and responses

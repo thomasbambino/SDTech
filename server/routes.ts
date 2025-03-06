@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
@@ -13,6 +13,172 @@ import type { User } from "@shared/schema";
 import type { UploadedFile } from "express-fileupload";
 import * as fs from "fs";
 import * as path from "path";
+
+// Extend Express Request & Response types
+// Add type for user roles
+type UserRole = 'admin' | 'pending' | 'customer';
+
+// Add type for base user schema
+interface BaseUser {
+  id: number;
+  username: string;
+  password: string;
+  email: string;
+  role: UserRole;
+  firstName?: string | null;
+  lastName?: string | null;
+  phoneNumber?: string | null;
+  companyName?: string | null;
+  isTemporaryPassword?: boolean;
+  freshbooksId?: string | null;
+  inquiryDetails?: string | null;
+  freshbooksToken?: string | null;
+}
+
+// Add type for request user
+interface RequestUser extends Express.User {
+  id: number;
+  role: UserRole;
+  username: string;
+  email: string;
+  password?: string;
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string | null;
+  companyName: string | null;
+  freshbooksId: string | null;
+  freshbooksToken: string | null;
+  isTemporaryPassword?: boolean;
+  inquiryDetails: string | null;
+}
+
+// Add type for request parameters
+interface RequestParams {
+  id: string;
+  clientId: string;
+  projectId: string;
+  noteId: string;
+  [key: string]: string;
+}
+
+// Add type for params dictionary
+interface ParamsWithId extends Record<string, string> {
+  id: string;
+}
+
+// Add type for params with project ID
+interface ParamsWithProjectId extends Record<string, string> {
+  projectId: string;
+}
+
+// Add type for params with both IDs
+interface ParamsWithClientAndProjectId extends Record<string, string> {
+  clientId: string;
+  projectId: string;
+}
+
+// Add type for session with Freshbooks tokens
+interface SessionWithFreshbooks extends Record<string, any> {
+  freshbooksTokens?: {
+    access_token: string;
+    refresh_token: string;
+  };
+}
+
+// Add type for authenticated request
+interface AuthenticatedRequest extends Omit<Request, 'user' | 'params' | 'session'> {
+  user: RequestUser;
+  session: SessionWithFreshbooks;
+  isAuthenticated(): boolean;
+  params: RequestParams;
+  body: {
+    role?: UserRole;
+    newPassword?: string;
+    client?: Partial<FreshbooksClient>;
+    project?: Partial<FreshbooksProject>;
+    due_date?: string;
+    [key: string]: any;
+  };
+  files?: {
+    [key: string]: UploadedFile | UploadedFile[];
+  };
+}
+
+// Add type for project schema  
+interface ProjectSchema {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  clientId: number | null;
+  freshbooksId: string | null;
+  createdAt: Date | null;
+  progress: number | null;
+  updatedAt?: Date | null;
+}
+
+// Add type for API responses
+interface ApiResponse<T = any> {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  details?: string;
+  data?: T;
+}
+
+// Add type for Freshbooks project response
+interface FreshbooksProjectResponse {
+  project: {
+    id: string;
+    title: string;
+    description?: string;
+    due_date?: string;
+    status?: string;
+    completed?: boolean;
+    created_at?: string;
+    updated_at?: string;
+    client_id?: string;
+    [key: string]: any;
+  }
+}
+
+// Add type for project note
+interface ProjectNote {
+  id: number;
+  projectId: number;
+  createdBy: number;
+  content: string;
+  createdAt: Date;
+  updatedAt?: Date;
+  [key: string]: any;
+}
+
+// Add type for branding settings 
+interface BrandingSettings {
+  siteTitle: string;
+  tabText: string;
+  logoPath: string | null;
+  faviconPath: string | null;
+}
+
+// Add type for storage operations
+interface StorageOperations {
+  createUser(user: Partial<BaseUser>): Promise<BaseUser>;
+  getUser(id: number): Promise<BaseUser | null>;
+  getUserByUsername(username: string): Promise<BaseUser | null>;
+  updateUserRole(id: number, role: UserRole): Promise<BaseUser>;
+  updateUserPassword(id: number, password: string, isTemp: boolean): Promise<void>;
+  getUsersByRole(role: UserRole): Promise<BaseUser[]>;
+  getAllUsers(): Promise<BaseUser[]>;
+  hashPassword(password: string): Promise<string>;
+  comparePassword(password: string, hash: string): Promise<boolean>;
+  createProject(project: Partial<ProjectSchema>): Promise<ProjectSchema>;
+  getProject(id: number): Promise<ProjectSchema | null>;
+  updateProject(id: number, updates: Partial<ProjectSchema>): Promise<ProjectSchema>;
+  getProjectsByClientId(clientId: number): Promise<ProjectSchema[]>;
+  getProjectNote(id: number): Promise<ProjectNote | null>;
+  deleteProjectNote(id: number): Promise<void>;
+}
 
 const scryptAsync = promisify(scrypt);
 
@@ -947,27 +1113,29 @@ app.get("/api/freshbooks/clients", async (req, res) => {
     }
   });
 
-  // Add PATCH endpoint for updating project
-  app.patch("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
+  // Add PATCH endpoint for updating project due date
+  app.patch("/api/freshbooks/clients/:clientId/projects/:projectId", async (req: AuthenticatedRequest, res: Response) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Authentication required" });
       }
 
       const { clientId, projectId } = req.params;
-      const { due_date } = req.body;
+      const { due_date } = req.body as { due_date: string };
 
       console.log('Updating project due date in Freshbooks:', { clientId, projectId, due_date });
 
-      // Get the token using the helper function
+      // Get the token using the helper function  
       const accessToken = getFreshbooksToken(req);
       if (!accessToken) {
+        console.error('No Freshbooks access token available');
         return res.status(401).json({ 
           error: "Freshbooks authentication required" 
         });
       }
 
-      // Get business account ID
+      // Get business ID
+      console.log('Fetching user profile with token to get business ID');
       const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -985,18 +1153,26 @@ app.get("/api/freshbooks/clients", async (req, res) => {
       }
 
       const meData = await meResponse.json();
-      const accountId = meData.response?.business_memberships?.[0]?.business?.account_id;
+      console.log('Received profile data:', {
+        hasResponse: !!meData.response,
+        hasBusinessMemberships: !!meData.response?.business_memberships,
+        membershipCount: meData.response?.business_memberships?.length || 0
+      });
+      
+      // Get businessId instead of accountId
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
 
-      if (!accountId) {
-        console.error('No account ID found in profile response', meData);
-        throw new Error("No account ID found in profile");
+      if (!businessId) {
+        console.error('No business ID found in profile response', meData);
+        throw new Error("No business ID found in profile");
       }
 
-      console.log('Using account ID:', accountId);
+      console.log('Using business ID:', businessId);
 
-      // Update project in Freshbooks using accounting API  
+      // Use projects API instead of accounting API
+      console.log('Updating project using Freshbooks Projects API');
       const fbResponse = await fetch(
-        `https://api.freshbooks.com/accounting/account/${accountId}/projects/projects/${projectId}`,
+        `https://api.freshbooks.com/projects/business/${businessId}/projects/${projectId}`,
         {
           method: 'PUT',
           headers: {
@@ -1020,9 +1196,9 @@ app.get("/api/freshbooks/clients", async (req, res) => {
         throw new Error(`Failed to update project: ${fbResponse.status}`);
       }
 
-      const updatedProject = await fbResponse.json();
-      console.log('Successfully updated project:', updatedProject);
-      res.json(updatedProject);
+      const responseData = await fbResponse.json() as FreshbooksProjectResponse;
+      console.log('Successfully updated project:', responseData);
+      res.json(responseData.project);
     } catch (error) {
       console.error('Error updating project:', {
         error,
@@ -1031,29 +1207,6 @@ app.get("/api/freshbooks/clients", async (req, res) => {
       });
       res.status(500).json({
         error: "Failed to update project", 
-        details: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-
-  // Add this endpoint with the other Freshbooks routes
-  app.put("/api/freshbooks/clients/:id", requireAdmin, async (req, res) => {
-    try {
-      const tokens = req.session.freshbooksTokens;
-      if (!tokens) {
-        return res.status(401).json({
-          error: "Freshbooks not connected",
-          details: "Please connect your Freshbooks account first"
-        });
-      }
-
-      const clientId = req.params.id;
-      const updatedClient = await freshbooksService.updateClient(tokens.access_token, clientId, req.body.client);
-      res.json(updatedClient);
-    } catch (error) {
-      console.error("Error updating client:", error);
-      res.status(500).json({
-        error: "Failed to update client",
         details: error instanceof Error ? error.message : String(error)
       });
     }
