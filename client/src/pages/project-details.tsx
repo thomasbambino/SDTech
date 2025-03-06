@@ -493,13 +493,7 @@ export default function ProjectDetails() {
         <div className="flex justify-between items-start mb-8">
           <div>
             <h1 className="text-3xl font-bold">{project.title}</h1>
-            <p className="text-muted-foreground">
-              Created {formatDate(project.createdAt?.toString())}
-            </p>
           </div>
-          <Badge variant={project.status === 'Active' || project.status === 'active' ? 'default' : 'secondary'}>
-            {project.status}
-          </Badge>
         </div>
 
         {/* Project Description */}
