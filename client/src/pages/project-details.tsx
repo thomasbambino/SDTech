@@ -606,15 +606,6 @@ export default function ProjectDetails() {
                   </Popover>
                 )}
               </div>
-
-              {/* Estimated completion */}
-              <div className="text-sm">
-                <span className="font-medium">Est. Completion:</span>{" "}
-                {project.progress === 100 ? "Complete" :
-                  (project.due_date || project.dueDate) ?
-                    `Target: ${new Date(project.due_date || project.dueDate || '').toLocaleDateString()}` :
-                    "Not estimated"}
-              </div>
             </CardContent>
           </Card>
 
