@@ -117,7 +117,9 @@ export default function ProjectDetails() {
   const isAdmin = user?.role === 'admin';
   const isCustomer = user?.role === 'customer';
   const [isEditingFinancial, setIsEditingFinancial] = useState(false);
-  const [tempFixedPrice, setTempFixedPrice] = useState(false); // Initialize to false or the project's initial value
+  const [tempFixedPrice, setTempFixedPrice] = useState<boolean | number>(false); // Initialize to false or the project's initial value
+  const [budget, setBudget] = useState<number | undefined>(undefined);
+  const [fixedPrice, setFixedPrice] = useState<number | undefined>(undefined);
 
 
   // Effect to initialize from localStorage when component mounts
@@ -190,7 +192,6 @@ export default function ProjectDetails() {
           // ... rest of the properties
           budget: projectData.budget,
           fixedPrice: projectData.fixedPrice,
-          billingMethod: projectData.billingMethod,
           projectType: projectData.projectType,
           billedAmount: projectData.billedAmount,
           billedStatus: projectData.billedStatus,
@@ -407,6 +408,7 @@ export default function ProjectDetails() {
     refetchOnWindowFocus: true
   });
 
+  // Update financial mutation - UPDATED
   const updateFinancialMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch(`/api/freshbooks/projects/${id}`, {
@@ -419,7 +421,8 @@ export default function ProjectDetails() {
           project: {
             title: project?.title,
             description: project?.description || '',
-            fixed_price: tempFixedPrice ? "600.00" : "0.00", // Set proper decimal value
+            budget: budget?.toString() || "0.00",
+            fixed_price: fixedPrice?.toString() || "0.00",
             client_id: project?.clientId
           }
         }),
@@ -458,6 +461,8 @@ export default function ProjectDetails() {
 
   useEffect(() => {
     if (project) {
+      setBudget(project.budget);
+      setFixedPrice(typeof project.fixedPrice === 'boolean' ? (project.fixedPrice ? 1 : 0) : parseFloat(project.fixedPrice));
       setTempFixedPrice(typeof project.fixedPrice === 'boolean' ? project.fixedPrice : project.fixedPrice === 'Yes');
     }
   }, [project]);
@@ -685,64 +690,63 @@ export default function ProjectDetails() {
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              {project.budget && (
-                <div className="text-sm">
-                  <span className="font-medium">Budget:</span>{" "}
-                  ${Number(project.budget).toLocaleString()}
-                </div>
-              )}
-              {project.billedAmount && (
-                <div className="text-sm">
-                  <span className="font-medium">Billed:</span>{" "}
-                  ${Number(project.billedAmount).toLocaleString()}
-                </div>
-              )}
-              <div className="text-sm flex items-center justify-between">
-                <div>
-                  <span className="font-medium">Fixed Price:</span>{" "}
-                  {isEditingFinancial ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setTempFixedPrice(!tempFixedPrice)}
-                      className="ml-2"
-                    >
-                      {tempFixedPrice ? "Yes" : "No"}
-                    </Button>
-                  ) : (
-                    <Badge variant={isFixedPrice ? "default" : "secondary"}>
-                      {isFixedPrice ? "Yes" : "No"}
-                    </Badge>
-                  )}
-                </div>
-                {isEditingFinancial && (
-                  <div className="space-x-2">
-                    <Button
-                      size="sm"
-                      onClick={() => updateFinancialDetails()}
-                      disabled={updateFinancialMutation.isPending}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setIsEditingFinancial(false);
-                        setTempFixedPrice(isFixedPrice);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
+              <div className="text-sm space-y-2">
+                {isEditingFinancial ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Budget:</span>
+                      <Input
+                        type="number"
+                        defaultValue={project.budget ? project.budget.toString() : ""}
+                        onChange={(e) => setBudget(parseFloat(e.target.value))}
+                        className="w-32"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Fixed Price:</span>
+                      <Input
+                        type="number"
+                        defaultValue={fixedPrice ? fixedPrice.toString() : ""}
+                        onChange={(e) => setFixedPrice(parseFloat(e.target.value))}
+                        className="w-32"
+                      />
+                    </div>
+                    <div className="space-x-2 mt-4">
+                      <Button
+                        size="sm"
+                        onClick={() => updateFinancialDetails()}
+                        disabled={updateFinancialMutation.isPending}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setIsEditingFinancial(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {project.budget && (
+                      <div>
+                        <span className="font-medium">Budget:</span>{" "}
+                        ${Number(project.budget).toLocaleString()}
+                      </div>
+                    )}
+                    {project.fixedPrice && (
+                      <div>
+                        <span className="font-medium">Fixed Price:</span>{" "}
+                        {typeof project.fixedPrice === 'boolean' ? (project.fixedPrice ? "Yes" : "No") : project.fixedPrice}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
-              {project.billingMethod && (
-                <div className="text-sm">
-                  <span className="font-medium">Billing Method:</span>{" "}
-                  {project.billingMethod}
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>
