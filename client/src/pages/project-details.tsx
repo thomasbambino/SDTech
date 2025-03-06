@@ -143,15 +143,15 @@ export default function ProjectDetails() {
 
   // Single effect to initialize all form values when project data is available
   useEffect(() => {
-    if (project) {
-      // Initialize form values
-      setEditedTitle(project.title);
-      setEditedDescription(project.description || '');
-      setBudget(project.budget ? project.budget / 100 : 0);
-      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
-        parseFloat(project.fixedPrice?.toString() || '0'));
-    }
-  }, [project]);
+    if (!project) return; // Only run when project is defined
+
+    // Initialize form values
+    setEditedTitle(project.title);
+    setEditedDescription(project.description || '');
+    setBudget(project.budget ? project.budget / 100 : 0);
+    setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
+      parseFloat(project.fixedPrice?.toString() || '0'));
+  }, [project?.id]); // Only depend on project.id to prevent unnecessary re-runs
 
 
   // Fetch project details
@@ -536,7 +536,6 @@ export default function ProjectDetails() {
     }
   });
 
-
   if (projectLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -606,7 +605,6 @@ export default function ProjectDetails() {
   }
 
   const currentStage = getStageFromProgress(project.progress || 0);
-
 
   console.log("Project data right before render:", {
     id: project.id,
@@ -968,7 +966,7 @@ export default function ProjectDetails() {
                         <CardContent className="pt-6">
                           <div className="flex justify-between items-start gap-4">
                             <div className="flex-1">
-                              <p className="whitespace-pre-wrap mb-2">{note.content}</p>
+                                                            <p className="whitespace-pre-wrap mb-2">{note.content}</p>
                               <div className="flex items-center text-sm text-muted-foreground">
                                 <span>By {note.createdBy === user?.id ? 'You' : `User ${note.createdBy}`}</span>
                                 <span className="mx-2">•</span>
