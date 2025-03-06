@@ -420,8 +420,8 @@ export default function ProjectDetails() {
           project: {
             title: project?.title,
             description: project?.description || '',
-            budget: budget?.toString() || "0.00",
-            fixed_price: fixedPrice?.toString() || "0.00",
+            budget: budget?.toFixed(2) || "0.00",
+            fixed_price: fixedPrice?.toFixed(2) || "0.00",
             client_id: project?.clientId
           }
         }),
