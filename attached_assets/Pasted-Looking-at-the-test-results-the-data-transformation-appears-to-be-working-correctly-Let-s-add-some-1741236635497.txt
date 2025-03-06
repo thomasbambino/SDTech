@@ -1,0 +1,86 @@
+Looking at the test results, the data transformation appears to be working correctly. Let's add some extra debugging to your component to determine why the due date isn't displaying:
+
+```jsx
+// Add this immediately before your return statement
+console.log("Project data right before render:", {
+  id: project.id,
+  title: project.title,
+  due_date: project.due_date,
+  dueDate: project.dueDate,
+  typeof_due_date: typeof project.due_date,
+  typeof_dueDate: typeof project.dueDate,
+  check: project.due_date || project.dueDate,
+  typeof_check: typeof (project.due_date || project.dueDate)
+});
+```
+
+I strongly suspect there's an issue with how we're accessing the API response data. Let's try a more direct fix by modifying your JSX:
+
+1. First, directly alter the due date display in the JSX (don't change the whole component, just this section):
+
+```jsx
+<div className="text-sm flex items-center justify-between">
+  <div>
+    <span className="font-medium">Due: </span> 
+    {(() => {
+      console.log("Due date values in JSX:", {
+        due_date: project.due_date,
+        dueDate: project.dueDate
+      });
+      
+      // Force string conversion and thorough checking
+      const dueDateValue = String(project.due_date || project.dueDate || '');
+      console.log("Final due date value:", dueDateValue);
+      
+      if (!dueDateValue || dueDateValue === 'undefined' || dueDateValue === 'null') {
+        return "Not set";
+      }
+      
+      try {
+        // Directly create a date to display
+        const dateObj = new Date(dueDateValue);
+        if (isNaN(dateObj.getTime())) {
+          console.error("Invalid date value:", dueDateValue);
+          return "Invalid date";
+        }
+        return dateObj.toLocaleDateString();
+      } catch (err) {
+        console.error("Error formatting date:", err);
+        return "Date error";
+      }
+    })()}
+  </div>
+  {/* Rest of the popover code stays the same */}
+</div>
+```
+
+2. If the issue persists, let's add debugging to your API request function:
+
+```javascript
+// In your queryFn, right before returning transformedData
+console.log("Final data being returned:", {
+  due_date: transformedData.due_date,
+  dueDate: transformedData.dueDate,
+  raw_due_date: projectData.due_date
+});
+```
+
+3. If neither of those helps, there could be a caching issue. Try adding this:
+
+```javascript
+// Add after your updateDueDateMutation.onSuccess handler
+onSuccess: () => {
+  // Existing code...
+  
+  // Force a hard reload of the page after updating the date
+  setTimeout(() => window.location.reload(), 1000);
+}
+```
+
+Since the logs show that the due date is being updated successfully in the API, but not displaying in your UI, the issue could be related to:
+
+1. A React state or rendering issue
+2. A caching problem with the query
+3. A mismatch between how the data is stored and accessed in the component
+
+The added debugging and direct approach in the JSX should help identify and fix the problem.

@@ -433,6 +433,17 @@ export default function ProjectDetails() {
   const currentStage = getStageFromProgress(project.progress || 0);
   const isFixedPrice = typeof project.fixedPrice === 'boolean' ? project.fixedPrice : project.fixedPrice === 'Yes';
 
+  console.log("Project data right before render:", {
+    id: project.id,
+    title: project.title,
+    due_date: project.due_date,
+    dueDate: project.dueDate,
+    typeof_due_date: typeof project.due_date,
+    typeof_dueDate: typeof project.dueDate,
+    check: project.due_date || project.dueDate,
+    typeof_check: typeof (project.due_date || project.dueDate)
+  });
+
   return (
     <div className="min-h-screen bg-background">
       <NavBar />
@@ -522,9 +533,33 @@ export default function ProjectDetails() {
               <div className="text-sm flex items-center justify-between">
                 <div>
                   <span className="font-medium">Due:</span>{" "}
-                  {(project.due_date || project.dueDate) ?
-                    formatDate(project.due_date || project.dueDate) :
-                    "Not set"}
+                  {(() => {
+                    console.log("Due date values in JSX:", {
+                      due_date: project.due_date,
+                      dueDate: project.dueDate
+                    });
+
+                    // Force string conversion and thorough checking
+                    const dueDateValue = String(project.due_date || project.dueDate || '');
+                    console.log("Final due date value:", dueDateValue);
+
+                    if (!dueDateValue || dueDateValue === 'undefined' || dueDateValue === 'null') {
+                      return "Not set";
+                    }
+
+                    try {
+                      // Directly create a date to display
+                      const dateObj = new Date(dueDateValue);
+                      if (isNaN(dateObj.getTime())) {
+                        console.error("Invalid date value:", dueDateValue);
+                        return "Invalid date";
+                      }
+                      return dateObj.toLocaleDateString();
+                    } catch (err) {
+                      console.error("Error formatting date:", err);
+                      return "Date error";
+                    }
+                  })()}
                 </div>
                 {isEditingDueDate && (
                   <Popover>
@@ -537,11 +572,20 @@ export default function ProjectDetails() {
                     <PopoverContent className="w-auto p-0" align="end">
                       <CalendarComponent
                         mode="single"
-                        selected={(project.due_date || project.dueDate) ?
-                          new Date(project.due_date || project.dueDate || '') :
-                          undefined}
+                        selected={(() => {
+                          const dateStr = project.due_date || project.dueDate;
+                          if (!dateStr) return undefined;
+                          try {
+                            const date = new Date(dateStr);
+                            return isNaN(date.getTime()) ? undefined : date;
+                          } catch (err) {
+                            console.error("Error parsing date for calendar:", err);
+                            return undefined;
+                          }
+                        })()}
                         onSelect={(date) => {
                           if (date) {
+                            console.log("Selected new date:", date);
                             updateDueDateMutation.mutate(date);
                           }
                         }}
