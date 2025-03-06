@@ -117,6 +117,10 @@ export default function ProjectDetails() {
   const isAdmin = user?.role === 'admin';
   const isCustomer = user?.role === 'customer';
   const [isEditingFinancial, setIsEditingFinancial] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedDescription, setEditedDescription] = useState('');
   const [budget, setBudget] = useState<number | undefined>(undefined);
   const [fixedPrice, setFixedPrice] = useState<number | undefined>(undefined);
   const [showBudget, setShowBudget] = useState(() => {
@@ -127,10 +131,6 @@ export default function ProjectDetails() {
       return false;
     }
   });
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [isEditingDescription, setIsEditingDescription] = useState(false);
-  const [editedTitle, setEditedTitle] = useState('');
-  const [editedDescription, setEditedDescription] = useState('');
 
   // Effect to save budget visibility preference
   useEffect(() => {
@@ -141,9 +141,10 @@ export default function ProjectDetails() {
     }
   }, [showBudget, id]);
 
-  // Effect to initialize form values when project data is available
+  // Single effect to initialize all form values when project data is available
   useEffect(() => {
     if (project) {
+      // Initialize form values
       setEditedTitle(project.title);
       setEditedDescription(project.description || '');
       setBudget(project.budget ? project.budget / 100 : 0);
@@ -485,27 +486,11 @@ export default function ProjectDetails() {
     }
   });
 
-  // Update effect to initialize financial values
-  useEffect(() => {
-    if (project) {
-      // Convert budget from cents to dollars for display
-      setBudget(project.budget ? project.budget / 100 : 0);
-      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
-        parseFloat(project.fixedPrice?.toString() || '0'));
-    }
-  }, [project]);
 
   const updateFinancialDetails = () => {
     updateFinancialMutation.mutate();
   };
 
-  useEffect(() => {
-    if (project) {
-      setBudget(project.budget ? project.budget / 100 : 0);
-      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 : parseFloat(project.fixedPrice?.toString() || '0'));
-
-    }
-  }, [project]);
 
   const updateProjectDetailsMutation = useMutation({
     mutationFn: async (data: { title?: string; description?: string }) => {
@@ -550,17 +535,6 @@ export default function ProjectDetails() {
       });
     }
   });
-
-  useEffect(() => {
-    if (project) {
-      setEditedTitle(project.title);
-      setEditedDescription(project.description || '');
-      setBudget(project.budget ? project.budget / 100 : 0);
-      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
-        parseFloat(project.fixedPrice?.toString() || '0'));
-    }
-  }, [project]);
-
 
 
   if (projectLoading) {
