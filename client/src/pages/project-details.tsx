@@ -60,7 +60,8 @@ interface FreshbooksProject {
   title: string;
   description: string;
   status: string;
-  dueDate?: string;
+  due_date?: string;  // Add this property
+  dueDate?: string;   // Keep for backward compatibility
   budget?: number;
   fixedPrice?: boolean | string;
   createdAt?: string;
@@ -282,7 +283,7 @@ export default function ProjectDetails() {
     onSuccess: () => {
       // Follow the exact pattern from EditProjectDialog
       queryClient.invalidateQueries({ queryKey: ['/api/freshbooks/projects'] });
-      queryClient.invalidateQueries({ 
+      queryClient.invalidateQueries({
         queryKey: ['/api/freshbooks/clients', project.clientId, 'projects']
       });
 
@@ -338,7 +339,6 @@ export default function ProjectDetails() {
     staleTime: 0, // Always fetch fresh data
     refetchOnMount: true // Refetch when component mounts
   });
-
 
   if (projectLoading) {
     return (
