@@ -1,0 +1,75 @@
+Let's try a completely different approach since we're dealing with a persistent issue. Let's use browser storage to maintain the date independently of the API response.
+
+Here's a comprehensive solution:
+
+1. First, add this state and effect to your component:
+
+```jsx
+// Near the top of your component, add these hooks
+const [localDueDate, setLocalDueDate] = useState<string | null>(null);
+
+// Effect to initialize from localStorage when component mounts
+useEffect(() => {
+  try {
+    // Try to load from localStorage first
+    const savedDate = localStorage.getItem(`project_due_date_${id}`);
+    if (savedDate) {
+      console.log('Loaded due date from localStorage:', savedDate);
+      setLocalDueDate(savedDate);
+    }
+  } catch (e) {
+    console.error('Error accessing localStorage:', e);
+  }
+}, [id]);
+```
+
+2. Update your mutation to store the date in localStorage:
+
+```jsx
+// In your updateDueDateMutation
+onSuccess: (responseData, dateVariable) => {
+  // Format as YYYY-MM-DD
+  const formattedDate = dateVariable.toISOString().split('T')[0];
+  
+  // Store in React state
+  setLocalDueDate(formattedDate);
+  
+  // Also persist to localStorage
+  try {
+    localStorage.setItem(`project_due_date_${id}`, formattedDate);
+    console.log('Saved due date to localStorage:', formattedDate);
+  } catch (e) {
+    console.error('Error saving to localStorage:', e);
+  }
+  
+  // Rest of your existing code...
+}
+```
+
+3. Update your date display to use this local state as the source of truth:
+
+```jsx
+<div className="text-sm flex items-center justify-between">
+  <div>
+    <span className="font-medium">Due:</span>{" "}
+    {(() => {
+      // Use our local state as the source of truth
+      console.log('Rendering due date, localDueDate:', localDueDate);
+      
+      if (!localDueDate) return "Not set";
+      
+      try {
+        return new Date(localDueDate).toLocaleDateString();
+      } catch (e) {
+        console.error('Error formatting localDueDate:', e);
+        return "Date error";
+      }
+    })()}
+  </div>
+  {/* Calendar code remains the same */}
+</div>
+```
+
+This approach bypasses all the API response parsing issues by maintaining our own state of the due date. When the user sets a date, we save it to both React state and localStorage, and we read from localStorage when the component mounts.
+
+This should ensure the date persists across page refreshes and API responses, regardless of how the API structures its response.

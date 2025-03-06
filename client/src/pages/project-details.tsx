@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Calendar, DollarSign, AlertTriangle, Trash2, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -112,9 +112,24 @@ export default function ProjectDetails() {
   const [newNote, setNewNote] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isEditingDueDate, setIsEditingDueDate] = useState(false);
+  const [localDueDate, setLocalDueDate] = useState<string | null>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isCustomer = user?.role === 'customer';
+
+  // Effect to initialize from localStorage when component mounts
+  useEffect(() => {
+    try {
+      // Try to load from localStorage first
+      const savedDate = localStorage.getItem(`project_due_date_${id}`);
+      if (savedDate) {
+        console.log('Loaded due date from localStorage:', savedDate);
+        setLocalDueDate(savedDate);
+      }
+    } catch (e) {
+      console.error('Error accessing localStorage:', e);
+    }
+  }, [id]);
 
   // Fetch project details
   const {
@@ -327,32 +342,25 @@ export default function ProjectDetails() {
       return responseData;
     },
     onSuccess: (responseData, dateVariable) => {
-      // Update the UI directly with our own updated object
-      const updatedProject = {
-        ...project,
-        due_date: dateVariable.toISOString().split('T')[0],
-        dueDate: dateVariable.toISOString().split('T')[0]
-      };
+      // Format as YYYY-MM-DD
+      const formattedDate = dateVariable.toISOString().split('T')[0];
 
-      // Set this directly in the query cache
-      queryClient.setQueryData(
-        ["/api/freshbooks/clients", id, "projects", id],
-        updatedProject
-      );
+      // Store in React state
+      setLocalDueDate(formattedDate);
+
+      // Also persist to localStorage
+      try {
+        localStorage.setItem(`project_due_date_${id}`, formattedDate);
+        console.log('Saved due date to localStorage:', formattedDate);
+      } catch (e) {
+        console.error('Error saving to localStorage:', e);
+      }
 
       toast({
         title: "Success",
         description: "Due date updated successfully",
       });
       setIsEditingDueDate(false);
-
-      // Delay refreshing other data
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['/api/freshbooks/projects'] });
-        queryClient.invalidateQueries({
-          queryKey: ['/api/freshbooks/clients', project?.clientId, 'projects']
-        });
-      }, 2000);
     },
     onError: (error) => {
       console.error("Error updating due date:", error);
@@ -363,7 +371,6 @@ export default function ProjectDetails() {
       });
     }
   });
-
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -571,7 +578,16 @@ export default function ProjectDetails() {
               <div className="text-sm flex items-center justify-between">
                 <div>
                   <span className="font-medium">Due:</span>{" "}
-                  {formatDate(project.due_date)}
+                  {(() => {
+                    console.log('Rendering due date, localDueDate:', localDueDate);
+                    if (!localDueDate) return "Not set";
+                    try {
+                      return new Date(localDueDate).toLocaleDateString();
+                    } catch (e) {
+                      console.error('Error formatting localDueDate:', e);
+                      return "Date error";
+                    }
+                  })()}
                 </div>
 
                 {/* Calendar popover for date selection */}
@@ -586,7 +602,7 @@ export default function ProjectDetails() {
                     <PopoverContent className="w-auto p-0" align="end">
                       <CalendarComponent
                         mode="single"
-                        selected={project.due_date ? new Date(project.due_date) : undefined}
+                        selected={localDueDate ? new Date(localDueDate) : undefined}
                         onSelect={(date) => {
                           if (date) {
                             console.log("Date selected in calendar:", date);
