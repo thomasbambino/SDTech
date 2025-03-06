@@ -135,7 +135,16 @@ export default function ProjectDetails() {
 
         const data = await response.json();
         console.log('Received project data:', data);
-        return data;
+
+        // Handle both direct and nested response formats
+        const projectData = data.project ? data.project : data;
+
+        return {
+          ...projectData,
+          due_date: projectData.due_date || undefined,  // Ensure due_date is properly extracted
+          createdAt: projectData.created_at || projectData.createdAt,
+          clientId: projectData.client_id || projectData.clientId,
+        };
       } catch (error) {
         console.error('Error fetching project:', error);
         throw error;
@@ -261,10 +270,10 @@ export default function ProjectDetails() {
         credentials: 'include',
         body: JSON.stringify({
           project: {
-            title: project.title,
-            description: project.description || '',
+            title: project?.title,
+            description: project?.description || '',
             due_date: formattedDate,
-            client_id: project.clientId
+            client_id: project?.clientId
           }
         }),
       });
@@ -282,7 +291,7 @@ export default function ProjectDetails() {
       // Follow the exact pattern from EditProjectDialog
       queryClient.invalidateQueries({ queryKey: ['/api/freshbooks/projects'] });
       queryClient.invalidateQueries({
-        queryKey: ['/api/freshbooks/clients', project.clientId, 'projects']
+        queryKey: ['/api/freshbooks/clients', project?.clientId, 'projects']
       });
 
       // Also invalidate the specific query used in this component
@@ -498,8 +507,8 @@ export default function ProjectDetails() {
               <div className="text-sm flex items-center justify-between">
                 <div>
                   <span className="font-medium">Due:</span>{" "}
-                  {(project.due_date || project.dueDate) ? 
-                    formatDate(project.due_date || project.dueDate) : 
+                  {(project.due_date || project.dueDate) ?
+                    formatDate(project.due_date || project.dueDate) :
                     "Not set"}
                 </div>
                 {isEditingDueDate && (
@@ -513,8 +522,8 @@ export default function ProjectDetails() {
                     <PopoverContent className="w-auto p-0" align="end">
                       <CalendarComponent
                         mode="single"
-                        selected={(project.due_date || project.dueDate) ? 
-                          new Date(project.due_date || project.dueDate || '') : 
+                        selected={(project.due_date || project.dueDate) ?
+                          new Date(project.due_date || project.dueDate || '') :
                           undefined}
                         onSelect={(date) => {
                           if (date) {
