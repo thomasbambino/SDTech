@@ -1,0 +1,101 @@
+This persistent issue suggests a deeper problem with how the data is being processed. Let's take a more systematic approach:
+
+1. First, let's understand exactly what's coming back from the API:
+
+```javascript
+// In your project query function, add these detailed logs
+queryFn: async () => {
+  try {
+    console.log('Fetching project details for ID:', id);
+    
+    const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+      credentials: 'include',
+    });
+    
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      // Your existing error handling...
+    }
+    
+    const data = await response.json();
+    console.log('FULL RAW API RESPONSE:', JSON.stringify(data));
+    
+    // Extract the due date at each possible location and log it
+    console.log('Direct due_date:', data.due_date);
+    console.log('Direct dueDate:', data.dueDate);
+    console.log('Nested project.due_date:', data.project?.due_date);
+    
+    // Continue with your transformation logic...
+    // ...
+  }
+}
+```
+
+2. Now, let's directly set both object references instead of trying to update through react-query:
+
+```javascript
+const updateDueDateMutation = useMutation({
+  mutationFn: async (date: Date) => {
+    // Your existing function...
+  },
+  onSuccess: (responseData, selectedDate) => {
+    // Store the formatted date
+    const formattedDate = selectedDate.toISOString().split('T')[0];
+    
+    // Create a modified copy of the project
+    const updatedProject = {
+      ...project,  // Copy existing project data
+      due_date: formattedDate,  // Set both formats
+      dueDate: formattedDate
+    };
+    
+    // Directly update the project in the cache
+    queryClient.setQueryData(
+      ["/api/freshbooks/clients", id, "projects", id],
+      updatedProject
+    );
+    
+    // Show success message
+    toast({
+      title: "Success",
+      description: "Due date updated successfully",
+    });
+    setIsEditingDueDate(false);
+    
+    // Disable any further refetching for now
+    // We'll rely on the directly updated cache
+  }
+});
+```
+
+3. Finally, use a `useEffect` to handle the displaying of the date value, which should be more persistent:
+
+```javascript
+// Add this state to track the displayed date
+const [displayedDueDate, setDisplayedDueDate] = useState<string | null>(null);
+
+// Add this effect to update the displayed date when the project changes
+useEffect(() => {
+  if (project) {
+    const dueDate = project.due_date || project.dueDate;
+    console.log("Effect detected due date:", dueDate);
+    if (dueDate) {
+      setDisplayedDueDate(dueDate);
+    }
+  }
+}, [project]);
+
+// Then in your JSX, use the state instead of directly reading from project
+<div>
+  <span className="font-medium">Due:</span>{" "}
+  {displayedDueDate ? formatDate(displayedDueDate) : "Not set"}
+</div>
+```
+
+This approach should make the date display more stable by:
+1. Logging exactly what's coming from the API to diagnose the issue
+2. Directly updating the cache with both versions of the property
+3. Using a React state to maintain the displayed date, making it less susceptible to being overwritten
+
+Since the date is briefly showing and then disappearing, this suggests the state is being correctly updated initially but then being overridden. This solution aims to make the displayed date more resilient to these changes.

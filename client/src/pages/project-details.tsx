@@ -126,8 +126,10 @@ export default function ProjectDetails() {
         console.log('Fetching project details for ID:', id);
 
         const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
-          credentials: 'include'
+          credentials: 'include',
         });
+
+        console.log('Response status:', response.status);
 
         if (!response.ok) {
           const contentType = response.headers.get('content-type');
@@ -140,24 +142,31 @@ export default function ProjectDetails() {
         }
 
         const data = await response.json();
-        console.log('Raw project response:', data);
+        console.log('FULL RAW API RESPONSE:', JSON.stringify(data));
 
-        // Extract project data from the response
+        // Extract the due date at each possible location and log it
+        console.log('Direct due_date:', data.due_date);
+        console.log('Direct dueDate:', data.dueDate);
+        console.log('Nested project.due_date:', data.project?.due_date);
+
+        // Continue with your transformation logic...
         const projectData = data.project || data;
         console.log('Extracted project data:', projectData);
 
-        // Transform to match your interface
         const transformedData = {
           ...projectData,
           id: projectData.id?.toString(),
           clientId: (projectData.client_id || projectData.clientId)?.toString(),
-
-          // Handle due date format - use both snake_case and camelCase
+          due_date: projectData.due_date || undefined,
           dueDate: projectData.due_date || projectData.dueDate,
-          due_date: projectData.due_date || projectData.dueDate,
         };
 
-        console.log('Transformed project data (with dates):', transformedData);
+        console.log('Final transformed data:', {
+          due_date: transformedData.due_date,
+          dueDate: transformedData.dueDate,
+          raw_due_date: projectData.due_date
+        });
+
         return transformedData;
       } catch (error) {
         console.error('Error fetching project:', error);
@@ -307,7 +316,7 @@ export default function ProjectDetails() {
 
       // Immediately update the UI with the new date without refetching
       queryClient.setQueryData(
-        ["/api/freshbooks/clients", id, "projects", id], 
+        ["/api/freshbooks/clients", id, "projects", id],
         (oldData) => {
           if (!oldData) return oldData;
 
@@ -378,7 +387,7 @@ export default function ProjectDetails() {
       if (!response.ok) throw new Error("Failed to fetch notes");
       return response.json();
     },
-    staleTime: 300000, // 5 minutes
+    staleTime: 30000, // 5 minutes
     refetchOnMount: true,
     refetchOnWindowFocus: true
   });
