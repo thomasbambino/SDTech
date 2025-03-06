@@ -255,9 +255,7 @@ export default function ProjectDetails() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          project: {
-            due_date: date.toISOString().split('T')[0]  // Format: YYYY-MM-DD
-          }
+          due_date: date.toISOString().split('T')[0]  // Format: YYYY-MM-DD
         })
       });
 

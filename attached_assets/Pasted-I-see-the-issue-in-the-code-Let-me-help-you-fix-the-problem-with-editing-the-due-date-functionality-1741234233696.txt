@@ -1,0 +1,94 @@
+I see the issue in the code. Let me help you fix the problem with editing the due date functionality in the ProjectDetails component.
+
+Looking at both components, I can see that in the ClientProfile component, due dates are being displayed correctly, but in the ProjectDetails component there seems to be an issue with the date format and update functionality.
+
+Let me analyze and fix the problem:
+
+After analyzing both components, I've identified several issues with the due date functionality in the ProjectDetails component:
+
+1. **Incorrect API endpoint**: The ProjectDetails component is trying to update the due date using `/api/freshbooks/clients/${id}/projects/${id}` which doesn't match the endpoint pattern used elsewhere in the application.
+
+2. **Data structure mismatch**: The project data structure for updating the due date is nested with `project: { due_date: ... }` instead of using the flatter structure that appears to be consistent with the rest of the application.
+
+3. **Inconsistent date format handling**: The date handling in the Calendar component isn't consistent with how dates are managed elsewhere.
+
+Here's how to fix the issue:
+
+1. Update the `updateDueDateMutation` function in the ProjectDetails component to use the correct endpoint and data structure:
+
+```jsx
+const updateDueDateMutation = useMutation({
+  mutationFn: async (date: Date) => {
+    const response = await fetch(`/api/freshbooks/projects/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        dueDate: date.toISOString().split('T')[0]  // Format: YYYY-MM-DD
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update due date');
+    }
+
+    return response.json();
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({
+      queryKey: ["/api/freshbooks/projects", id]
+    });
+    toast({
+      title: "Success",
+      description: "Due date updated successfully",
+    });
+    setIsEditingDueDate(false);
+  },
+  onError: (error) => {
+    console.error("Error updating due date:", error);
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to update due date. Please try again.",
+      variant: "destructive",
+    });
+  }
+});
+```
+
+2. Make sure the date handling in the Calendar component is working correctly:
+
+```jsx
+<CalendarComponent
+  mode="single"
+  selected={project.dueDate ? new Date(project.dueDate) : undefined}
+  onSelect={(date) => {
+    if (date) {
+      updateDueDateMutation.mutate(date);
+    }
+  }}
+  initialFocus
+/>
+```
+
+3. Ensure the `formatDate` function is handling dates consistently:
+
+```jsx
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Not set';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid date';
+    return date.toLocaleDateString();
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Date not available';
+  }
+};
+```
+
+These changes should align the ProjectDetails component's due date functionality with how it's handled in the ClientProfile component. The main differences were in the API endpoint structure and how the date data is sent to the server.
+
+Would you like me to provide a more comprehensive fix that includes updating the project query function as well to ensure consistency?

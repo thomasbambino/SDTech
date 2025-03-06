@@ -907,12 +907,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { clientId, projectId } = req.params;
-      const { project } = req.body;
+      const { due_date } = req.body;
 
       console.log('Updating project due date in Freshbooks:', { 
         clientId, 
         projectId, 
-        project,
+        due_date,
         requestBody: req.body 
       });
 
@@ -969,7 +969,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ project })
+          body: JSON.stringify({
+            project: {
+              due_date: due_date
+            }
+          })
         }
       );
 
@@ -978,6 +982,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Failed to update project in Freshbooks:', {
           status: fbResponse.status,
           statusText: fbResponse.statusText,
+          requestBody: { project: { due_date } },
           responseBody: responseText
         });
         throw new Error(`Failed to update project: ${fbResponse.status} - ${responseText}`);
