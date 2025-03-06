@@ -1,0 +1,85 @@
+Looking at the server logs you've shared, I can see what's happening with the due date issue. The problem is in how the data is being returned from the API and processed in your component.
+
+From the logs, I can see:
+
+1. The due date is correctly being **updated** in Freshbooks:
+   ```
+   project: {
+     title: 'Test Project9',
+     description: 'Test Pop',
+     due_date: '2025-03-29',
+     client_id: 1163333,
+     ...
+   }
+   ```
+
+2. The update is successful, with the API confirming the change:
+   ```
+   Successfully updated project: {
+     project: {
+       id: 12796597,
+       title: 'Test Project9',
+       description: 'Test Pop',
+       due_date: '2025-03-29',
+       ...
+     },
+     ...
+   }
+   ```
+
+The issue is likely with how the API response is being transformed in your frontend. Based on the logs, the date is available in the API response, but it might be nested inside a `project` property that isn't getting properly extracted.
+
+Here's what I recommend adding to your `queryFn` to resolve this issue:
+
+```javascript
+// In your project fetching queryFn
+queryFn: async () => {
+  try {
+    console.log('Fetching project details for ID:', id);
+
+    const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      // Your existing error handling...
+    }
+
+    // Get the raw data
+    const data = await response.json();
+    console.log('Raw project API response:', data);
+
+    // Extract project data - check if it's nested in a 'project' property
+    const projectData = data.project || data;
+    
+    // Transform to match your interface, properly handling the date fields
+    const transformedData = {
+      ...projectData,
+      id: projectData.id?.toString(),
+      clientId: (projectData.client_id || projectData.clientId)?.toString(),
+      
+      // Handle due date format - use both snake_case and camelCase
+      dueDate: projectData.due_date || projectData.dueDate,
+      due_date: projectData.due_date || projectData.dueDate,
+      
+      // Other transformations...
+    };
+
+    console.log('Transformed project data (with dates):', {
+      id: transformedData.id,
+      clientId: transformedData.clientId,
+      dueDate: transformedData.dueDate,
+      due_date: transformedData.due_date
+    });
+
+    return transformedData;
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    throw error;
+  }
+}
+```
+
+This will ensure that both `dueDate` and `due_date` properties are available in your project object, allowing your JSX to properly display the date.
+
+The key issue is likely that the API is returning data nested differently than expected, and we need to ensure we're correctly extracting and normalizing it before displaying it in your component.
