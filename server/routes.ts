@@ -701,8 +701,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add debug endpoint to view raw project data
+  app.get("/api/debug/projects/:projectId", async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const { projectId } = req.params;
+      console.log('Debug: Fetching project details from Freshbooks:', { projectId });
+
+      const accessToken = getFreshbooksToken(req);
+      if (!accessToken) {
+        console.error('No Freshbooks access token available');
+        return res.status(401).json({ 
+          error: "Freshbooks authentication required" 
+        });
+      }
+
+      // Get business ID
+      console.log('Debug: Fetching user profile with token');
+      const meResponse = await fetch('https://api.freshbooks.com/auth/api/v1/users/me', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!meResponse.ok) {
+        throw new Error(`Failed to get account details: ${meResponse.status}`);
+      }
+
+      const meData = await meResponse.json();
+      const businessId = meData.response?.business_memberships?.[0]?.business?.id;
+
+      if (!businessId) {
+        throw new Error("No business ID found in profile");
+      }
+
+      console.log('Debug: Using business ID:', businessId);
+
+      // Fetch project using Projects API
+      console.log('Debug: Fetching project from Freshbooks Projects API');
+      const fbResponse = await fetch(
+        `https://api.freshbooks.com/projects/business/${businessId}/projects/${projectId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!fbResponse.ok) {
+        console.error('Debug: Failed to fetch from Freshbooks:', {
+          status: fbResponse.status,
+          statusText: fbResponse.statusText,
+          text: await fbResponse.text()
+        });
+        throw new Error(`Failed to fetch from Freshbooks: ${fbResponse.status}`);
+      }
+
+      // Return raw response data
+      const rawData = await fbResponse.json();
+      console.log('Debug: Raw Freshbooks response:', rawData);
+      
+      res.json({
+        message: "Raw project data from Freshbooks API",
+        endpoint: `https://api.freshbooks.com/projects/business/${businessId}/projects/${projectId}`,
+        rawResponse: rawData
+      });
+
+    } catch (error) {
+      console.error('Debug: Error fetching project:', error);
+      res.status(500).json({
+        error: "Failed to fetch project details",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Add the new project endpoint
-app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
+  app.get("/api/freshbooks/clients/:clientId/projects/:projectId", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ error: "Authentication required" });
