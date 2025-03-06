@@ -1,0 +1,88 @@
+// The issue with the due date update is caused by three problems:
+// 1. The API endpoint structure is incorrect
+// 2. The request payload format is incorrect
+// 3. The date formatting is inconsistent
+
+// Here are the changes needed to fix the updateDueDateMutation function:
+
+const updateDueDateMutation = useMutation({
+  mutationFn: async (date: Date) => {
+    // Format date as YYYY-MM-DD
+    const formattedDate = date.toISOString().split('T')[0];
+    
+    console.log('Updating due date:', {
+      projectId: id,
+      date: formattedDate
+    });
+
+    // Use the correct API endpoint structure
+    // Notice this uses /api/projects/${id} instead of /api/freshbooks/clients/${id}/projects/${id}
+    const response = await fetch(`/api/projects/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        dueDate: formattedDate // Use 'dueDate' as the key, not 'due_date'
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update due date');
+    }
+
+    return response.json();
+  },
+  onSuccess: () => {
+    // Update the correct query key to match how the project is fetched
+    queryClient.invalidateQueries({
+      queryKey: ["/api/freshbooks/clients", id, "projects", id]
+    });
+    
+    // Also invalidate other possible query keys that might be used
+    queryClient.invalidateQueries({
+      queryKey: ["/api/projects", id]
+    });
+    
+    toast({
+      title: "Success",
+      description: "Due date updated successfully",
+    });
+    setIsEditingDueDate(false);
+  },
+  onError: (error) => {
+    console.error("Error updating due date:", error);
+    toast({
+      title: "Error",
+      description: error instanceof Error ? error.message : "Failed to update due date. Please try again.",
+      variant: "destructive",
+    });
+  }
+});
+
+// Also update the formatDate function for better consistency:
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Not set';
+  try {
+    const date = new Date(dateString);
+    // Use the same format as in ClientProfile component for consistency
+    return date.toLocaleDateString();
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
+};
+
+// Make sure the Calendar component is using the correct date:
+<CalendarComponent
+  mode="single"
+  selected={project.dueDate ? new Date(project.dueDate) : undefined}
+  onSelect={(date) => {
+    if (date) {
+      updateDueDateMutation.mutate(date);
+    }
+  }}
+  initialFocus
+/>

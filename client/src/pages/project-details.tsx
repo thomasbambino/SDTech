@@ -248,14 +248,14 @@ export default function ProjectDetails() {
         date: date.toISOString().split('T')[0]  // Format: YYYY-MM-DD
       });
 
-      const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+      const response = await fetch(`/api/projects/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
         },
         credentials: 'include',
         body: JSON.stringify({
-          due_date: date.toISOString().split('T')[0]  // Format: YYYY-MM-DD
+          dueDate: date.toISOString().split('T')[0]  // Format: YYYY-MM-DD
         })
       });
 
@@ -267,9 +267,15 @@ export default function ProjectDetails() {
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate both queries to ensure UI updates
       queryClient.invalidateQueries({
         queryKey: ["/api/freshbooks/clients", id, "projects", id]
       });
+
+      queryClient.invalidateQueries({
+        queryKey: ["/api/projects", id]
+      });
+
       toast({
         title: "Success",
         description: "Due date updated successfully",

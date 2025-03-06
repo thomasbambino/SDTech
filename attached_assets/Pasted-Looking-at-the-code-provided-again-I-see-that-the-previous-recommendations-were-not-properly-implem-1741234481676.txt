@@ -1,0 +1,87 @@
+Looking at the code provided again, I see that the previous recommendations were not properly implemented. Let me analyze the specific issues and provide a clearer solution:
+
+After analyzing the code in detail, I've identified the specific issues preventing the due date update functionality from working in the ProjectDetails component:
+
+## The Main Issues
+
+1. **Incorrect API Endpoint**: 
+   - In the ClientProfile component, project mutations use `/api/projects/${id}` 
+   - In the ProjectDetails component, it's incorrectly using `/api/freshbooks/clients/${id}/projects/${id}`
+
+2. **Incorrect Request Payload Format**:
+   - The payload uses `due_date` instead of `dueDate` which appears to be the correct property name based on other code
+
+3. **Date Formatting Inconsistency**:
+   - ClientProfile uses `new Date(project.dueDate).toLocaleDateString()`
+   - ProjectDetails uses a custom `formatDate` function that might handle dates differently
+
+## How to Fix It
+
+Here's what you need to change in the ProjectDetails component:
+
+1. Update the `updateDueDateMutation` function to use the correct endpoint and payload format:
+
+```jsx
+const updateDueDateMutation = useMutation({
+  mutationFn: async (date: Date) => {
+    const formattedDate = date.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+    
+    // Use the correct API endpoint structure
+    const response = await fetch(`/api/projects/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        dueDate: formattedDate // Use 'dueDate' as the key, not 'due_date'
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update due date');
+    }
+
+    return response.json();
+  },
+  // ...rest of the function
+});
+```
+
+2. Optionally update the `formatDate` function for better consistency:
+
+```jsx
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Not set';
+  try {
+    return new Date(dateString).toLocaleDateString();
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Invalid date';
+  }
+};
+```
+
+3. Make sure to invalidate all relevant queries after updating the date:
+
+```jsx
+onSuccess: () => {
+  // Invalidate both possible query patterns
+  queryClient.invalidateQueries({
+    queryKey: ["/api/freshbooks/clients", id, "projects", id]
+  });
+  
+  queryClient.invalidateQueries({
+    queryKey: ["/api/projects", id]
+  });
+  
+  toast({
+    title: "Success",
+    description: "Due date updated successfully",
+  });
+  setIsEditingDueDate(false);
+}
+```
+
+These changes align the ProjectDetails component with the successful implementation in the ClientProfile component, particularly focusing on using the correct API endpoint structure and data format.
