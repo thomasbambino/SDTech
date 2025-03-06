@@ -500,7 +500,7 @@ export default function ProjectDetails() {
               <div className="text-sm flex items-center justify-between">
                 <div>
                   <span className="font-medium">Due:</span>{" "}
-                  {project.dueDate ? formatDate(project.dueDate) : "Not set"}
+                  {project.due_date ? formatDate(project.due_date) : "Not set"}
                 </div>
                 {isEditingDueDate && (
                   <Popover>
@@ -513,7 +513,7 @@ export default function ProjectDetails() {
                     <PopoverContent className="w-auto p-0" align="end">
                       <CalendarComponent
                         mode="single"
-                        selected={project.dueDate ? new Date(project.dueDate) : undefined}
+                        selected={project.due_date ? new Date(project.due_date) : undefined}
                         onSelect={(date) => {
                           if (date) {
                             updateDueDateMutation.mutate(date);
