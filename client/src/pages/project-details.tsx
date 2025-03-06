@@ -167,8 +167,39 @@ export default function ProjectDetails() {
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [editedDescription, setEditedDescription] = useState('');
-  const [budget, setBudget] = useState<number | undefined>(undefined);
-  const [fixedPrice, setFixedPrice] = useState<number | undefined>(undefined);
+  const [budget, setBudget] = useState<number | undefined>(() => {
+    try {
+      const savedBudget = localStorage.getItem(`project_budget_${id}`);
+      if (savedBudget) {
+        console.log('Loaded budget from localStorage:', savedBudget);
+        return parseFloat(savedBudget);
+      }
+      // Fallback to cached project data if available
+      if (cachedProject?.budget) {
+        return cachedProject.budget / 100; // Convert from cents to dollars
+      }
+    } catch (e) {
+      console.error('Error accessing localStorage for budget:', e);
+    }
+    return undefined;
+  });
+  const [fixedPrice, setFixedPrice] = useState<number | undefined>(() => {
+    try {
+      const savedFixedPrice = localStorage.getItem(`project_fixed_price_${id}`);
+      if (savedFixedPrice) {
+        console.log('Loaded fixed price from localStorage:', savedFixedPrice);
+        return parseFloat(savedFixedPrice);
+      }
+      // Fallback to cached project data if available
+      if (cachedProject?.fixedPrice) {
+        return typeof cachedProject.fixedPrice === 'boolean' ? 0 :
+          parseFloat(cachedProject.fixedPrice.toString() || '0');
+      }
+    } catch (e) {
+      console.error('Error accessing localStorage for fixed price:', e);
+    }
+    return undefined;
+  });
   const [showBudget, setShowBudget] = useState(() => {
     try {
       const saved = localStorage.getItem(`project_budget_visible_${id}`);
@@ -241,20 +272,27 @@ export default function ProjectDetails() {
 
   // Effect to initialize form values when project data is available
   useEffect(() => {
-    // This will run whenever project changes and is defined
     if (project) {
+      // Set title and description directly from project
       setEditedTitle(project.title);
       setEditedDescription(project.description || '');
-      setBudget(project.budget ? project.budget / 100 : 0);
-      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
-        parseFloat(project.fixedPrice?.toString() || '0'));
 
-      // You could also load the due date from project if available
-      if (project.due_date || project.dueDate) {
+      // For budget and fixed price, only set from project if not already in localStorage
+      if (!localStorage.getItem(`project_budget_${id}`)) {
+        setBudget(project.budget ? project.budget / 100 : 0);
+      }
+
+      if (!localStorage.getItem(`project_fixed_price_${id}`)) {
+        setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
+          parseFloat(project.fixedPrice?.toString() || '0'));
+      }
+
+      // For due date (which we're already handling)
+      if (!localStorage.getItem(`project_due_date_${id}`) && (project.due_date || project.dueDate)) {
         setLocalDueDate(project.due_date || project.dueDate || null);
       }
     }
-  }, [project]); // This is safe because we're using the whole project object
+  }, [project, id]);
 
 
   // Add note mutation
@@ -471,7 +509,22 @@ export default function ProjectDetails() {
       // Fixed price should be a string formatted as a decimal
       const fixedPriceFormatted = fixedPrice ? fixedPrice.toFixed(2) : "0.00";
 
-      // Update cache first
+      // Save budget and fixed price to localStorage
+      try {
+        if (budget !== undefined) {
+          localStorage.setItem(`project_budget_${id}`, budget.toString());
+          console.log('Saved budget to localStorage:', budget);
+        }
+
+        if (fixedPrice !== undefined) {
+          localStorage.setItem(`project_fixed_price_${id}`, fixedPrice.toString());
+          console.log('Saved fixed price to localStorage:', fixedPrice);
+        }
+      } catch (e) {
+        console.error('Error saving financial details to localStorage:', e);
+      }
+
+      // Update cache
       updateCache({
         budget: budgetInCents,
         fixedPrice: fixedPriceFormatted
@@ -514,9 +567,14 @@ export default function ProjectDetails() {
         ["/api/freshbooks/clients", id, "projects", id],
         (oldData) => {
           if (!oldData) return cachedProject;
-          return { ...oldData, budget: cachedProject?.budget, fixedPrice: cachedProject?.fixedPrice };
+          return {
+            ...oldData,
+            budget: budget ? Math.round(budget * 100) : 0,
+            fixedPrice: fixedPrice ? fixedPrice.toFixed(2) : "0.00"
+          };
         }
       );
+
       setIsEditingFinancial(false);
       toast({
         title: "Success",
@@ -904,8 +962,7 @@ export default function ProjectDetails() {
               ) : (
                 <p className="whitespace-pre-wrap">{project.description || 'No description provided'}</p>
               )}
-            </CardContent>
-          </Card>
+            </CardContent>          </Card>
 
           {/* Financial Details */}
           <Card>
@@ -954,7 +1011,8 @@ export default function ProjectDetails() {
                         <Input
                           type="number"
                           defaultValue={budget?.toString() || ""}
-                          onChange={(e) => setBudget(parseFloat(e.target.value))}                          className="w-32"
+                          onChange={(e) => setBudget(parseFloat(e.target.value))}
+                          className="w-32"
                         />
                       </div>
                     )}
@@ -1017,7 +1075,8 @@ export default function ProjectDetails() {
                 <CardDescription>
                   Add notes and updates about the project
                 </CardDescription>
-              </CardHeader><CardContent>
+              </CardHeader>
+              <CardContent>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Textarea

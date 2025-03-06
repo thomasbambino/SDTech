@@ -1,0 +1,127 @@
+Let's apply the same approach to the fixed price to ensure it persists between page reloads:
+
+I'll implement the same localStorage persistence approach for the fixed price and budget that we used for the due date. This will ensure the financial data persists between page reloads.
+
+Here's how to implement it:
+
+### 1. Initialize State from localStorage
+
+Modify your state declarations to load from localStorage on component initialization:
+
+```typescript
+const [budget, setBudget] = useState<number | undefined>(() => {
+  try {
+    const savedBudget = localStorage.getItem(`project_budget_${id}`);
+    if (savedBudget) {
+      console.log('Loaded budget from localStorage:', savedBudget);
+      return parseFloat(savedBudget);
+    }
+  } catch (e) {
+    console.error('Error accessing localStorage for budget:', e);
+  }
+  return undefined;
+});
+
+const [fixedPrice, setFixedPrice] = useState<number | undefined>(() => {
+  try {
+    const savedFixedPrice = localStorage.getItem(`project_fixed_price_${id}`);
+    if (savedFixedPrice) {
+      console.log('Loaded fixed price from localStorage:', savedFixedPrice);
+      return parseFloat(savedFixedPrice);
+    }
+  } catch (e) {
+    console.error('Error accessing localStorage for fixed price:', e);
+  }
+  return undefined;
+});
+```
+
+### 2. Save to localStorage When Updated
+
+Update your financial mutation's `onSuccess` handler to save the values to localStorage:
+
+```typescript
+onSuccess: () => {
+  // Save budget and fixed price to localStorage
+  try {
+    if (budget !== undefined) {
+      localStorage.setItem(`project_budget_${id}`, budget.toString());
+      console.log('Saved budget to localStorage:', budget);
+    }
+    
+    if (fixedPrice !== undefined) {
+      localStorage.setItem(`project_fixed_price_${id}`, fixedPrice.toString());
+      console.log('Saved fixed price to localStorage:', fixedPrice);
+    }
+  } catch (e) {
+    console.error('Error saving financial details to localStorage:', e);
+  }
+
+  // Rest of your existing code...
+  queryClient.invalidateQueries({
+    queryKey: ["/api/freshbooks/clients", id, "projects", id]
+  });
+  setIsEditingFinancial(false);
+  toast({
+    title: "Success",
+    description: "Financial details updated successfully",
+  });
+}
+```
+
+### 3. Update the Project Loading Effect
+
+Modify your `useEffect` that initializes form values to prioritize localStorage values:
+
+```typescript
+useEffect(() => {
+  if (project) {
+    // Set title and description directly from project
+    setEditedTitle(project.title);
+    setEditedDescription(project.description || '');
+    
+    // For budget and fixed price, only set from project if not already in localStorage
+    if (!localStorage.getItem(`project_budget_${id}`)) {
+      setBudget(project.budget ? project.budget / 100 : 0);
+    }
+    
+    if (!localStorage.getItem(`project_fixed_price_${id}`)) {
+      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
+        parseFloat(project.fixedPrice?.toString() || '0'));
+    }
+    
+    // For due date (which you're already handling)
+    if (!localStorage.getItem(`project_due_date_${id}`) && (project.due_date || project.dueDate)) {
+      setLocalDueDate(project.due_date || project.dueDate || null);
+    }
+  }
+}, [project, id]);
+```
+
+### 4. Optional Direct Cache Update
+
+For improved UI responsiveness, also directly update the query cache:
+
+```typescript
+// In the onSuccess handler of updateFinancialMutation
+const updatedProject = {
+  ...project,
+  budget: budget ? Math.round(budget * 100) : 0,
+  fixedPrice: fixedPrice ? fixedPrice.toFixed(2) : "0.00"
+};
+
+// Set this directly in the query cache
+queryClient.setQueryData(
+  ["/api/freshbooks/clients", id, "projects", id],
+  updatedProject
+);
+```
+
+This approach ensures that:
+
+1. Budget and fixed price values are loaded from localStorage when the component initializes
+2. When updated, the values are saved to localStorage
+3. The UI reflects the updated values immediately
+4. The values persist between page refreshes
+
+Apply these changes to your code, and the fixed price and budget should persist just like the due date now does.
