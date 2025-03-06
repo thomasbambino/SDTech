@@ -1,0 +1,151 @@
+I understand the issue you're facing. When you update one property like progress, the other Freshbooks data disappears because the internal API update doesn't return the complete project data. Let's implement caching to solve this:
+
+Looking at your issue, I understand that when you update a property on the project page (like progress), other Freshbooks data disappears until you manually set all fields. This is a common issue when working with multiple data sources where partial updates can lead to data loss.
+
+## Solution: Caching and Data Merging
+
+Here's a comprehensive approach to solve this:
+
+1. **Create a local cache** for project data that preserves all data between updates
+2. **Use the cache as a fallback** when API calls fail
+3. **Optimize API calls** to avoid unnecessary Freshbooks requests
+4. **Merge data intelligently** when partial updates occur
+
+## Implementation Steps
+
+### 1. Create a Project Data Cache
+
+Add this custom hook at the top of your component to manage cached project data:
+
+```typescript
+const useProjectCache = (projectId: string) => {
+  // Initialize cache from localStorage
+  const [cachedProject, setCachedProject] = useState<FreshbooksProject | null>(() => {
+    try {
+      const saved = localStorage.getItem(`project_data_${projectId}`);
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error('Error reading from localStorage:', e);
+      return null;
+    }
+  });
+
+  // Function to update cache
+  const updateCache = useCallback((newData: Partial<FreshbooksProject>) => {
+    setCachedProject(prevData => {
+      if (!prevData) return newData as FreshbooksProject;
+      
+      // Merge old and new data
+      const merged = { ...prevData, ...newData };
+      
+      // Save to localStorage
+      try {
+        localStorage.setItem(`project_data_${projectId}`, JSON.stringify(merged));
+      } catch (e) {
+        console.error('Error saving to localStorage:', e);
+      }
+      
+      return merged;
+    });
+  }, [projectId]);
+
+  return { cachedProject, updateCache };
+};
+```
+
+### 2. Update Your API Query to Use the Cache
+
+Modify your project query function to use and update the cache:
+
+```typescript
+const { cachedProject, updateCache } = useProjectCache(id);
+
+const {
+  data: project,
+  isLoading: projectLoading,
+  error: projectError
+} = useQuery<FreshbooksProject>({
+  queryKey: ["/api/freshbooks/clients", id, "projects", id],
+  queryFn: async () => {
+    try {
+      const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        // Error handling...
+        if (cachedProject) return cachedProject; // Return cached data if available
+        throw new Error('API error');
+      }
+
+      const data = await response.json();
+      const projectData = data.rawResponse?.project || data.project || data;
+      
+      // Transform your data as usual
+      const transformedData = {
+        // ...all your data transformations
+        // But preserve any locally managed properties from cache
+        progress: projectData.progress !== undefined ? 
+          projectData.progress : cachedProject?.progress
+      };
+
+      // Update the cache with fresh data
+      updateCache(transformedData);
+      return transformedData;
+    } catch (error) {
+      if (cachedProject) return cachedProject; // Fallback to cache on error
+      throw error;
+    }
+  },
+  staleTime: 60000
+});
+```
+
+### 3. Update Your Mutations to Use the Cache
+
+For each mutation (like progress updates), update the cache first and use `setQueryData` instead of just invalidating the query:
+
+```typescript
+const updateProgressMutation = useMutation({
+  mutationFn: async (progress: number) => {
+    // Update cache first
+    updateCache({ progress });
+    
+    // Then call API
+    const response = await fetch(`/api/projects/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ progress })
+    });
+    
+    if (!response.ok) throw new Error("Failed to update progress");
+    return response.json();
+  },
+  onSuccess: () => {
+    // Update the query data directly instead of invalidating
+    queryClient.setQueryData(
+      ["/api/freshbooks/clients", id, "projects", id],
+      (oldData) => {
+        if (!oldData) return cachedProject;
+        // Merge the progress update with existing data
+        return { ...oldData, progress: cachedProject?.progress };
+      }
+    );
+    
+    toast({ title: "Success", description: "Project progress updated" });
+  },
+  // ...error handling
+});
+```
+
+Apply the same pattern to your other mutations like `updateFinancialMutation`.
+
+This approach ensures that:
+
+1. You always have a complete set of project data available
+2. Local updates (like progress) don't cause Freshbooks data to disappear
+3. API failures don't result in data loss
+4. The UI remains consistent even when only partial data is updated
+
+This should resolve the issue where updating one property causes other Freshbooks data to disappear.
