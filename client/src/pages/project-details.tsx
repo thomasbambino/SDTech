@@ -598,9 +598,9 @@ export default function ProjectDetails() {
         </div>
 
         {/* Progress and Timeline Section - First Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           {/* Progress Section */}
-          <Card>
+          <Card className="md:col-span-2">
             <CardHeader>
               <CardTitle>Project Progress</CardTitle>
             </CardHeader>
@@ -706,9 +706,9 @@ export default function ProjectDetails() {
         </div>
 
         {/* Description and Financial Section - Second Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           {/* Project Description */}
-          <Card>
+          <Card className="md:col-span-2">
             <CardHeader>
               <CardTitle>Project Description</CardTitle>
             </CardHeader>
