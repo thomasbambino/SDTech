@@ -1,0 +1,107 @@
+I'm glad we're making progress! Let's fix that last issue where it doesn't show the currently set date from Freshbooks.
+
+The problem is likely with how we're extracting the date from the API response. When the data first loads, we need to make sure we're properly getting the due date from the API response.
+
+Let's update your query function to better handle the initial date:
+
+The issue is now clear - the currently set date isn't being properly extracted from the initial API response. 
+
+From the logs we've seen, the due date is definitely in the API response from Freshbooks, but it's not being correctly mapped to your React component's state. Let's fix that with an improved project query function that thoroughly looks for the date in all possible locations.
+
+Here's what you should update:
+
+1. Replace your current project query function with this improved version:
+
+```jsx
+const {
+  data: project,
+  isLoading: projectLoading,
+  error: projectError
+} = useQuery<FreshbooksProject>({
+  queryKey: ["/api/freshbooks/clients", id, "projects", id],
+  queryFn: async () => {
+    try {
+      console.log('Fetching project details for ID:', id);
+
+      const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        // Your existing error handling...
+      }
+
+      const data = await response.json();
+      console.log('Raw API response:', data);
+      
+      // Try to find the due date in multiple possible locations
+      const projectData = data.project || data;
+      
+      // Check all possible locations for the due date
+      let dueDateValue = null;
+      
+      // Check direct properties
+      if (projectData.due_date) {
+        console.log('Found due_date in project data:', projectData.due_date);
+        dueDateValue = projectData.due_date;
+      } else if (projectData.dueDate) {
+        console.log('Found dueDate in project data:', projectData.dueDate);
+        dueDateValue = projectData.dueDate;
+      }
+      // Look for nested data
+      else if (data.project?.due_date) {
+        console.log('Found nested due_date:', data.project.due_date);
+        dueDateValue = data.project.due_date;
+      }
+      
+      console.log('Final due date value:', dueDateValue);
+
+      // Transform the data to match our interface
+      const transformedData = {
+        ...projectData,
+        id: projectData.id?.toString(),
+        title: projectData.title,
+        description: projectData.description || '',
+        status: projectData.active ? 'Active' : 'Inactive',
+        
+        // Set both date formats
+        due_date: dueDateValue,
+        dueDate: dueDateValue,
+        
+        // Handle other properties
+        createdAt: projectData.created_at || projectData.createdAt,
+        clientId: (projectData.client_id || projectData.clientId)?.toString(),
+        budget: projectData.budget,
+        fixedPrice: projectData.fixed_price || projectData.fixedPrice,
+        billingMethod: projectData.billing_method || projectData.billingMethod,
+        projectType: projectData.project_type || projectData.projectType,
+        billedAmount: projectData.billed_amount || projectData.billedAmount,
+        billedStatus: projectData.billed_status || projectData.billedStatus
+      };
+
+      console.log('Transformed project data:', transformedData);
+      console.log('Due date after transformation:', {
+        due_date: transformedData.due_date,
+        dueDate: transformedData.dueDate
+      });
+      
+      return transformedData;
+    } catch (error) {
+      console.error('Error fetching project:', error);
+      throw error;
+    }
+  },
+  staleTime: 60000 // 1 minute
+});
+```
+
+2. Keep your new date card and the improved mutation function.
+
+This updated query function does a much more thorough job of:
+
+1. Checking all possible places the due date might be hiding in the API response
+2. Logging exactly what it finds to help with debugging
+3. Setting both `due_date` and `dueDate` properties correctly
+4. Providing detailed logs at each step
+
+This should ensure that when the project first loads, the existing due date from Freshbooks is properly displayed, and when you change it, that change persists correctly.
