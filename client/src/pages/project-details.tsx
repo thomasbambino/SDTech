@@ -127,6 +127,10 @@ export default function ProjectDetails() {
       return false;
     }
   });
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(project?.title || '');
+  const [editedDescription, setEditedDescription] = useState(project?.description || '');
 
   // Effect to save budget visibility preference
   useEffect(() => {
@@ -505,6 +509,61 @@ export default function ProjectDetails() {
     }
   }, [project]);
 
+  const updateProjectDetailsMutation = useMutation({
+    mutationFn: async (data: { title?: string; description?: string }) => {
+      const response = await fetch(`/api/freshbooks/projects/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          project: {
+            ...data,
+            client_id: project?.clientId
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Failed to update project');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/freshbooks/clients", id, "projects", id]
+      });
+      setIsEditingTitle(false);
+      setIsEditingDescription(false);
+      toast({
+        title: "Success",
+        description: "Project details updated successfully",
+      });
+    },
+    onError: (error) => {
+      console.error("Error updating project details:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update project",
+        variant: "destructive",
+      });
+    }
+  });
+
+  useEffect(() => {
+    if (project) {
+      setEditedTitle(project.title);
+      setEditedDescription(project.description || '');
+      setBudget(project.budget ? project.budget / 100 : 0);
+      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
+        parseFloat(project.fixedPrice?.toString() || '0'));
+    }
+  }, [project]);
+
+
   if (projectLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -592,8 +651,47 @@ export default function ProjectDetails() {
       <NavBar />
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">{project.title}</h1>
+          <div className="flex items-center gap-4">
+            {isEditingTitle ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  className="text-3xl font-bold w-[400px]"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => updateProjectDetailsMutation.mutate({ title: editedTitle })}
+                  disabled={updateProjectDetailsMutation.isPending}
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setIsEditingTitle(false);
+                    setEditedTitle(project?.title || '');
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-3xl font-bold">{project.title}</h1>
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setIsEditingTitle(true)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -710,10 +808,49 @@ export default function ProjectDetails() {
           {/* Project Description */}
           <Card className="md:col-span-2">
             <CardHeader>
-              <CardTitle>Project Description</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Project Description</CardTitle>
+                {isAdmin && !isEditingDescription && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setIsEditingDescription(true)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              <p className="whitespace-pre-wrap">{project.description || 'No description provided'}</p>
+              {isEditingDescription ? (
+                <div className="space-y-4">
+                  <Textarea
+                    value={editedDescription}
+                    onChange={(e) => setEditedDescription(e.target.value)}
+                    className="min-h-[200px]"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => updateProjectDetailsMutation.mutate({ description: editedDescription })}
+                      disabled={updateProjectDetailsMutation.isPending}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditingDescription(false);
+                        setEditedDescription(project?.description || '');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap">{project.description || 'No description provided'}</p>
+              )}
             </CardContent>
           </Card>
 
