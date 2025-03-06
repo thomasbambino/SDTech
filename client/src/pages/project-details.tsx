@@ -410,6 +410,18 @@ export default function ProjectDetails() {
   // Update financial mutation - UPDATED
   const updateFinancialMutation = useMutation({
     mutationFn: async () => {
+      // Budget needs to be an integer (in cents)
+      const budgetInCents = budget ? Math.round(budget * 100) : 0;
+
+      // Fixed price should be a string formatted as a decimal
+      const fixedPriceFormatted = fixedPrice ? fixedPrice.toFixed(2) : "0.00";
+
+      console.log('Updating financial details:', {
+        projectId: id,
+        budget: budgetInCents,  // Integer value (cents)
+        fixed_price: fixedPriceFormatted  // String value with 2 decimal places
+      });
+
       const response = await fetch(`/api/freshbooks/projects/${id}`, {
         method: 'PUT',
         headers: {
@@ -420,8 +432,8 @@ export default function ProjectDetails() {
           project: {
             title: project?.title,
             description: project?.description || '',
-            budget: budget?.toFixed(2) || "0.00",
-            fixed_price: fixedPrice?.toFixed(2) || "0.00",
+            budget: budgetInCents,  // Integer in cents
+            fixed_price: fixedPriceFormatted,  // String with 2 decimal places
             client_id: project?.clientId
           }
         }),
@@ -429,6 +441,7 @@ export default function ProjectDetails() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Financial update error response:', errorData);
         throw new Error(errorData.details || errorData.error || 'Failed to update project');
       }
 
@@ -457,8 +470,10 @@ export default function ProjectDetails() {
   // Update effect to initialize financial values
   useEffect(() => {
     if (project) {
-      setBudget(project.budget);
-      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 : parseFloat(project.fixedPrice?.toString() || '0'));
+      // Convert budget from cents to dollars for display
+      setBudget(project.budget ? project.budget / 100 : 0);
+      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
+        parseFloat(project.fixedPrice?.toString() || '0'));
     }
   }, [project]);
 
@@ -468,7 +483,7 @@ export default function ProjectDetails() {
 
   useEffect(() => {
     if (project) {
-      setBudget(project.budget);
+      setBudget(project.budget ? project.budget / 100 : 0);
       setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 : parseFloat(project.fixedPrice?.toString() || '0'));
 
     }
@@ -731,8 +746,9 @@ export default function ProjectDetails() {
                         size="sm"
                         onClick={() => {
                           setIsEditingFinancial(false);
-                          setBudget(project?.budget);
-                          setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 : parseFloat(project.fixedPrice?.toString() || '0'));
+                          setBudget(project?.budget ? project.budget / 100 : 0);
+                          setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
+                            parseFloat(project.fixedPrice?.toString() || '0'));
                         }}
                       >
                         Cancel
@@ -743,11 +759,11 @@ export default function ProjectDetails() {
                   <>
                     <div>
                       <span className="font-medium">Budget:</span>{" "}
-                      ${budget ? Number(budget).toLocaleString() : "0"}
+                      ${budget ? (budget).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
                     </div>
                     <div>
                       <span className="font-medium">Fixed Price:</span>{" "}
-                      ${fixedPrice ? Number(fixedPrice).toLocaleString() : "0"}
+                      ${fixedPrice ? fixedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
                     </div>
                   </>
                 )}

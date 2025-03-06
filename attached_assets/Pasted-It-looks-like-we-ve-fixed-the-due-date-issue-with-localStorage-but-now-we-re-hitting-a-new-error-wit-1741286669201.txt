@@ -1,0 +1,81 @@
+It looks like we've fixed the due date issue with localStorage but now we're hitting a new error with the financial details. The server is expecting the budget to be an integer, but we're sending it as a decimal number. Let's fix the budget update logic:
+
+Based on the error message you're seeing, the issue is with the budget field in the financial update. In the Freshbooks API, budget appears to be expected as an integer value (likely representing cents) rather than a decimal.
+
+## Here's how to fix the financial update:
+
+1. **Update the financial mutation function** to convert the dollar amounts to the correct format:
+
+```javascript
+const updateFinancialMutation = useMutation({
+  mutationFn: async () => {
+    // Budget needs to be an integer (in cents)
+    const budgetInCents = budget ? Math.round(budget * 100) : 0; 
+    
+    // Fixed price should be a string formatted as a decimal
+    const fixedPriceFormatted = fixedPrice ? fixedPrice.toFixed(2) : "0.00";
+    
+    console.log('Updating financial details:', {
+      projectId: id,
+      budget: budgetInCents,  // Integer value (cents)
+      fixed_price: fixedPriceFormatted  // String value with 2 decimal places
+    });
+
+    const response = await fetch(`/api/freshbooks/projects/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        project: {
+          title: project?.title,
+          description: project?.description || '',
+          budget: budgetInCents,  // Integer in cents
+          fixed_price: fixedPriceFormatted,  // String with 2 decimal places
+          client_id: project?.clientId
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Financial update error response:', errorData);
+      throw new Error(errorData.details || errorData.error || 'Failed to update project');
+    }
+
+    return response.json();
+  },
+  // Rest of the mutation stays the same
+});
+```
+
+2. **Update the display code** to account for the budget being stored in cents:
+
+```javascript
+// In the non-editing display section
+<div>
+  <span className="font-medium">Budget:</span>{" "}
+  ${budget ? (budget / 100).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : "0.00"}
+</div>
+```
+
+3. **Update the initialization** to convert from cents to dollars for the UI:
+
+```javascript
+useEffect(() => {
+  if (project) {
+    // Convert budget from cents to dollars for display
+    setBudget(project.budget ? project.budget / 100 : 0);
+    setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 : 
+      parseFloat(project.fixedPrice?.toString() || '0'));
+  }
+}, [project]);
+```
+
+These changes should resolve the "budget value is not a valid integer" error by ensuring that:
+1. The budget is sent to the API as an integer in cents
+2. The fixed price is sent as a properly formatted decimal string
+3. The displayed values are converted appropriately for human readability
+
+The due date functionality appears to be working correctly now with the localStorage solution.
