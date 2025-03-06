@@ -597,57 +597,48 @@ export default function ProjectDetails() {
           </div>
         </div>
 
-        {/* Progress Section */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Project Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                {isAdmin && (
-                  <div className="w-64">
-                    <Select
-                      value={currentStage}
-                      onValueChange={(value) => handleStageChange(value as ProjectStage)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select project stage" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(PROJECT_STAGES).map(([stage, progress]) => (
-                          <SelectItem key={stage} value={stage}>
-                            {stage} ({progress}%)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <div className="flex-1 space-y-2">
-                  <Progress value={project.progress || 0} />
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>{project.progress || 0}% Complete</span>
-                    <span>{currentStage}</span>
+        {/* Progress and Timeline Section - First Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* Progress Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  {isAdmin && (
+                    <div className="w-64">
+                      <Select
+                        value={currentStage}
+                        onValueChange={(value) => handleStageChange(value as ProjectStage)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select project stage" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(PROJECT_STAGES).map(([stage, progress]) => (
+                            <SelectItem key={stage} value={stage}>
+                              {stage} ({progress}%)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-2">
+                    <Progress value={project.progress || 0} />
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>{project.progress || 0}% Complete</span>
+                      <span>{currentStage}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Project Description */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Project Description</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap">{project.description || 'No description provided'}</p>
-          </CardContent>
-        </Card>
-
-        {/* Project Details Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+          {/* Timeline Card */}
           <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
@@ -669,7 +660,7 @@ export default function ProjectDetails() {
                 {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : "Not set"}
               </div>
 
-              {/* Due date - completely rewritten */}
+              {/* Due date */}
               <div className="text-sm flex items-center justify-between">
                 <div>
                   <span className="font-medium">Due:</span>{" "}
@@ -712,7 +703,21 @@ export default function ProjectDetails() {
               </div>
             </CardContent>
           </Card>
+        </div>
 
+        {/* Description and Financial Section - Second Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          {/* Project Description */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Description</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap">{project.description || 'No description provided'}</p>
+            </CardContent>
+          </Card>
+
+          {/* Financial Details */}
           <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
