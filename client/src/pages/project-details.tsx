@@ -141,19 +141,6 @@ export default function ProjectDetails() {
     }
   }, [showBudget, id]);
 
-  // Single effect to initialize all form values when project data is available
-  useEffect(() => {
-    if (!project) return; // Only run when project is defined
-
-    // Initialize form values
-    setEditedTitle(project.title);
-    setEditedDescription(project.description || '');
-    setBudget(project.budget ? project.budget / 100 : 0);
-    setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
-      parseFloat(project.fixedPrice?.toString() || '0'));
-  }, [project?.id]); // Only depend on project.id to prevent unnecessary re-runs
-
-
   // Fetch project details
   const {
     data: project,
@@ -227,6 +214,24 @@ export default function ProjectDetails() {
     },
     staleTime: 60000 // 1 minute
   });
+
+  // Effect to initialize form values when project data is available
+  useEffect(() => {
+    // This will run whenever project changes and is defined
+    if (project) {
+      setEditedTitle(project.title);
+      setEditedDescription(project.description || '');
+      setBudget(project.budget ? project.budget / 100 : 0);
+      setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
+        parseFloat(project.fixedPrice?.toString() || '0'));
+
+      // You could also load the due date from project if available
+      if (project.due_date || project.dueDate) {
+        setLocalDueDate(project.due_date || project.dueDate || null);
+      }
+    }
+  }, [project]); // This is safe because we're using the whole project object
+
 
   // Add note mutation
   const addNoteMutation = useMutation({

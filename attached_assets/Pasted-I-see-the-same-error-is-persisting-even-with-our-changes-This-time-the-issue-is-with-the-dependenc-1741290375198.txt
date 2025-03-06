@@ -1,0 +1,49 @@
+I see the same error is persisting even with our changes. This time, the issue is with the dependency array in the useEffect hook. Let's fix it by using a safer approach to handle the dependency:
+
+We're still encountering the `Cannot access 'project' before initialization` error. The issue is in how React evaluates the dependency array in your `useEffect` hook.
+
+The solution is to completely avoid referencing `project` in the dependency array. Here's the safe way to rewrite this code:
+
+```jsx
+// First, set up your component with these state variables (keep the existing ones)
+const { id } = useParams<{ id: string }>();
+const [editedTitle, setEditedTitle] = useState('');
+const [editedDescription, setEditedDescription] = useState('');
+const [budget, setBudget] = useState<number | undefined>(undefined);
+const [fixedPrice, setFixedPrice] = useState<number | undefined>(undefined);
+// ... other states
+
+// Then fetch your project data with useQuery (keep your existing query)
+const {
+  data: project,
+  isLoading: projectLoading,
+  error: projectError
+} = useQuery<FreshbooksProject>({ /* ... your existing query config ... */ });
+
+// IMPORTANT: Replace the problematic useEffect with this
+useEffect(() => {
+  // This will run whenever project changes and is defined
+  if (project) {
+    setEditedTitle(project.title);
+    setEditedDescription(project.description || '');
+    setBudget(project.budget ? project.budget / 100 : 0);
+    setFixedPrice(typeof project.fixedPrice === 'boolean' ? 0 :
+      parseFloat(project.fixedPrice?.toString() || '0'));
+    
+    // You could also load the due date from project if available
+    if (project.due_date || project.dueDate) {
+      setLocalDueDate(project.due_date || project.dueDate || null);
+    }
+  }
+}, [project]); // This is safe because we're using the whole project object
+```
+
+The key changes:
+
+1. We're now using the entire `project` object in the dependency array. This is safer because it's a direct reference to the query result.
+
+2. We're checking if `project` exists before trying to access its properties. This avoids the "before initialization" error.
+
+3. This effect will run whenever the project data changes, which is exactly what we want - initializing forms when data is loaded and updating them if the data changes.
+
+This approach is more reliable and should work without the initialization error.
