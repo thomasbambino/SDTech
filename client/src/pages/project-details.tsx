@@ -602,36 +602,36 @@ export default function ProjectDetails() {
           {/* Progress Section */}
           <Card className="md:col-span-2">
             <CardHeader>
-              <CardTitle>Project Progress</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Project Progress</CardTitle>
+                {isAdmin && (
+                  <div className="w-64">
+                    <Select
+                      value={currentStage}
+                      onValueChange={(value) => handleStageChange(value as ProjectStage)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select project stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(PROJECT_STAGES).map(([stage, progress]) => (
+                          <SelectItem key={stage} value={stage}>
+                            {stage} ({progress}%)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  {isAdmin && (
-                    <div className="w-64">
-                      <Select
-                        value={currentStage}
-                        onValueChange={(value) => handleStageChange(value as ProjectStage)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select project stage" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(PROJECT_STAGES).map(([stage, progress]) => (
-                            <SelectItem key={stage} value={stage}>
-                              {stage} ({progress}%)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div className="flex-1 space-y-2">
-                    <Progress value={project.progress || 0} />
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>{project.progress || 0}% Complete</span>
-                      <span>{currentStage}</span>
-                    </div>
+                <div className="flex-1 space-y-2">
+                  <Progress value={project.progress || 0} />
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>{project.progress || 0}% Complete</span>
+                    <span>{currentStage}</span>
                   </div>
                 </div>
               </div>
