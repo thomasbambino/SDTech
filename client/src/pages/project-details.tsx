@@ -271,29 +271,56 @@ export default function ProjectDetails() {
   // Update progress mutation
   const updateProgressMutation = useMutation({
     mutationFn: async (progress: number) => {
-      const response = await fetch(`/api/projects/${id}`, {
-        method: 'PATCH',
+      console.log('Updating project progress:', {
+        projectId: id,
+        progress: progress
+      });
+
+      const response = await fetch(`/api/freshbooks/projects/${id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
         credentials: 'include',
-        body: JSON.stringify({ progress })
+        body: JSON.stringify({
+          project: {
+            title: project?.title,
+            description: project?.description || '',
+            client_id: project?.clientId,
+            progress: progress
+          }
+        })
       });
-      if (!response.ok) throw new Error("Failed to update progress");
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          console.error('Progress update error response:', errorData);
+          throw new Error(errorData.details || errorData.error || `Failed to update progress: ${response.status}`);
+        } else {
+          const errorText = await response.text();
+          console.error('Progress update error text:', errorText);
+          throw new Error(`Server error: ${response.status} - ${errorText.slice(0, 100)}`);
+        }
+      }
+
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/freshbooks/clients", id, "projects", id]
+      });
       toast({
         title: "Success",
-        description: "Project progress updated",
+        description: "Project progress updated successfully",
       });
     },
     onError: (error) => {
       console.error("Error updating progress:", error);
       toast({
         title: "Error",
-        description: "Failed to update progress. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to update progress. Please try again.",
         variant: "destructive",
       });
     },
