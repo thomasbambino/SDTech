@@ -1,0 +1,83 @@
+The logs confirm that the due date is being updated successfully on the server:
+
+```
+Successfully updated project: {
+  project: {
+    id: 12796597,
+    title: 'Test Project9',
+    description: 'Test Pop',
+    due_date: '2025-03-26',
+    client_id: 1163333,
+    ...
+  },
+  ...
+}
+```
+
+And the request to get the project returns a 304 (Not Modified) status code:
+
+```
+GET /api/freshbooks/clients/12796597/projects/12796597 304 in 413ms
+```
+
+This 304 response might be the key to our issue. It means the browser is using a cached version of the response. Let's modify your code to address this:
+
+1. First, add a timestamp to your query key to prevent caching:
+
+```jsx
+// In your project fetch query
+{
+  queryKey: ["/api/freshbooks/clients", id, "projects", id, Date.now()],
+  queryFn: async () => {
+    // Your existing fetch function
+  }
+}
+```
+
+2. Alternatively, you can add cache-busting headers to your fetch request:
+
+```jsx
+const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
+  credentials: 'include',
+  headers: {
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache'
+  }
+});
+```
+
+3. For a quick test, let's try forcing a page reload after successful update:
+
+```jsx
+// In your updateDueDateMutation's onSuccess callback
+onSuccess: () => {
+  // Your existing invalidate queries code...
+  
+  toast({
+    title: "Success",
+    description: "Due date updated successfully",
+  });
+  setIsEditingDueDate(false);
+  
+  // Force a reload to bypass any caching issues
+  window.location.reload();
+}
+```
+
+The 304 Not Modified status indicates that even though the data has changed on the server, the browser is using a cached version of the response. This explains why even though the due date is correctly updated in the database, your UI isn't reflecting the change.
+
+If you prefer not to reload the page, you can try adding the `refetchInterval: 0` option to your query to force React Query to always fetch fresh data:
+
+```jsx
+{
+  queryKey: ["/api/freshbooks/clients", id, "projects", id],
+  queryFn: async () => {
+    // Your existing fetch function
+  },
+  refetchInterval: 0,
+  staleTime: 0,
+  cacheTime: 0
+}
+```
+
+This should help ensure that your component displays the updated due date after it's changed.

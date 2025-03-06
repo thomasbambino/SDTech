@@ -120,13 +120,17 @@ export default function ProjectDetails() {
     isLoading: projectLoading,
     error: projectError
   } = useQuery<FreshbooksProject>({
-    queryKey: ["/api/freshbooks/clients", id, "projects", id],
+    queryKey: ["/api/freshbooks/clients", id, "projects", id, Date.now()], // Add timestamp to force fresh data
     queryFn: async () => {
       try {
         console.log('Fetching project details for ID:', id);
 
         const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
           credentials: 'include',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
         });
 
         console.log('Response status:', response.status);
@@ -165,6 +169,10 @@ export default function ProjectDetails() {
         throw error;
       }
     },
+    // Add options to prevent caching
+    refetchInterval: 0,
+    staleTime: 0,
+    cacheTime: 0,
     retry: 1
   });
 
