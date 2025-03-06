@@ -1,0 +1,60 @@
+Looking at your code, I see the issue with displaying the due date. The problem is that you're checking for `project.due_date` to display the due date, but you might need to also check for `project.dueDate` depending on how your API returns the data.
+
+Here's how to fix the due date display issue:
+
+The issue is that your component is looking for `project.due_date` to display the date, but your data might be coming back with `project.dueDate` (camelCase) instead. This can happen because:
+
+1. Your API returns snake_case (`due_date`)
+2. But when it gets transformed in your frontend code or API layer, it might be converted to camelCase (`dueDate`)
+
+To fix this, you should check for both properties:
+
+```jsx
+<div className="text-sm flex items-center justify-between">
+  <div>
+    <span className="font-medium">Due:</span>{" "}
+    {project.due_date || project.dueDate ? 
+      formatDate(project.due_date || project.dueDate) : 
+      "Not set"}
+  </div>
+  {isEditingDueDate && (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Calendar className="h-4 w-4 mr-2" />
+          Select Date
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="end">
+        <CalendarComponent
+          mode="single"
+          selected={(project.due_date || project.dueDate) ? 
+            new Date(project.due_date || project.dueDate || '') : 
+            undefined}
+          onSelect={(date) => {
+            if (date) {
+              updateDueDateMutation.mutate(date);
+            }
+          }}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  )}
+</div>
+```
+
+Also, it would be helpful to add some debugging code to see exactly what's in your project data:
+
+```javascript
+console.log('Project data:', {
+  id: project.id,
+  dueDate: project.dueDate,
+  due_date: project.due_date,
+  clientId: project.clientId
+});
+```
+
+This will help you identify which property is actually holding the due date in your project data. 
+
+The key issue seems to be that you've updated your interface to handle both naming conventions (`dueDate` and `due_date`), but your JSX is only checking for `project.due_date`. The solution is to check for both properties when displaying the date.

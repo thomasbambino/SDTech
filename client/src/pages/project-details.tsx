@@ -60,8 +60,8 @@ interface FreshbooksProject {
   title: string;
   description: string;
   status: string;
-  due_date?: string;  // Add this property
-  dueDate?: string;   // Keep for backward compatibility
+  due_date?: string;  // Snake case from API
+  dueDate?: string;   // Camel case from transformations
   budget?: number;
   fixedPrice?: boolean | string;
   createdAt?: string;
@@ -253,7 +253,6 @@ export default function ProjectDetails() {
       });
 
       // Create a request that exactly mimics what EditProjectDialog does
-      // Include only the necessary project data
       const response = await fetch(`/api/freshbooks/projects/${id}`, {
         method: 'PUT',
         headers: {
@@ -266,7 +265,6 @@ export default function ProjectDetails() {
             description: project.description || '',
             due_date: formattedDate,
             client_id: project.clientId
-            // Omit fixed_price and budget to avoid validation errors
           }
         }),
       });
@@ -500,7 +498,9 @@ export default function ProjectDetails() {
               <div className="text-sm flex items-center justify-between">
                 <div>
                   <span className="font-medium">Due:</span>{" "}
-                  {project.due_date ? formatDate(project.due_date) : "Not set"}
+                  {(project.due_date || project.dueDate) ? 
+                    formatDate(project.due_date || project.dueDate) : 
+                    "Not set"}
                 </div>
                 {isEditingDueDate && (
                   <Popover>
@@ -513,7 +513,9 @@ export default function ProjectDetails() {
                     <PopoverContent className="w-auto p-0" align="end">
                       <CalendarComponent
                         mode="single"
-                        selected={project.due_date ? new Date(project.due_date) : undefined}
+                        selected={(project.due_date || project.dueDate) ? 
+                          new Date(project.due_date || project.dueDate || '') : 
+                          undefined}
                         onSelect={(date) => {
                           if (date) {
                             updateDueDateMutation.mutate(date);
