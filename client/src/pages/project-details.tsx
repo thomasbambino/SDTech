@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Calendar, DollarSign, AlertTriangle, Trash2, Pencil, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -106,8 +106,44 @@ const getStageFromProgress = (progress: number): ProjectStage => {
   return "Not Started";
 };
 
+// Add the useProjectCache hook at the top of your component
+const useProjectCache = (projectId: string) => {
+  // Initialize cache from localStorage
+  const [cachedProject, setCachedProject] = useState<FreshbooksProject | null>(() => {
+    try {
+      const saved = localStorage.getItem(`project_data_${projectId}`);
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error('Error reading from localStorage:', e);
+      return null;
+    }
+  });
+
+  // Function to update cache
+  const updateCache = useCallback((newData: Partial<FreshbooksProject>) => {
+    setCachedProject(prevData => {
+      if (!prevData) return newData as FreshbooksProject;
+
+      // Merge old and new data
+      const merged = { ...prevData, ...newData };
+
+      // Save to localStorage
+      try {
+        localStorage.setItem(`project_data_${projectId}`, JSON.stringify(merged));
+      } catch (e) {
+        console.error('Error saving to localStorage:', e);
+      }
+
+      return merged;
+    });
+  }, [projectId]);
+
+  return { cachedProject, updateCache };
+};
+
 export default function ProjectDetails() {
   const { id } = useParams<{ id: string }>();
+  const { cachedProject, updateCache } = useProjectCache(id);
   const { toast } = useToast();
   const [newNote, setNewNote] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -141,7 +177,7 @@ export default function ProjectDetails() {
     }
   }, [showBudget, id]);
 
-  // Fetch project details
+  // Update your project query to use the cache
   const {
     data: project,
     isLoading: projectLoading,
@@ -150,69 +186,47 @@ export default function ProjectDetails() {
     queryKey: ["/api/freshbooks/clients", id, "projects", id],
     queryFn: async () => {
       try {
-        console.log('Fetching project details for ID:', id);
-
         const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
           credentials: 'include',
         });
 
         if (!response.ok) {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Error: ${response.status}`);
-          } else {
-            throw new Error(`Server error: ${response.status}`);
-          }
+          if (cachedProject) return cachedProject; // Return cached data if available
+          throw new Error('API error');
         }
 
         const data = await response.json();
-        console.log('Raw API response:', data);
-
-        // Extract project data from the correct location
-        // The data might be in different structures
         const projectData = data.rawResponse?.project || data.project || data;
 
-        console.log('Extracted project data:', projectData);
-
-        // Extract due date directly from the project data
-        const dueDateValue = projectData.due_date;
-        console.log('Found due date value:', dueDateValue);
-
-        // Transform the data to match our interface
+        // Transform your data as usual
         const transformedData = {
           ...projectData,
           id: projectData.id?.toString(),
           title: projectData.title,
           description: projectData.description || '',
           status: projectData.active ? 'Active' : 'Inactive',
-
-          // Set both date properties
-          due_date: dueDateValue,
-          dueDate: dueDateValue,
-
-          // Other properties...
+          progress: projectData.progress !== undefined ? 
+            projectData.progress : cachedProject?.progress,
+          due_date: projectData.due_date,
+          dueDate: projectData.due_date,
           createdAt: projectData.created_at || projectData.createdAt,
           clientId: (projectData.client_id || projectData.clientId)?.toString(),
-          // ... rest of the properties
           budget: projectData.budget,
           fixedPrice: projectData.fixedPrice,
           projectType: projectData.projectType,
           billedAmount: projectData.billedAmount,
           billedStatus: projectData.billedStatus,
-          progress: projectData.progress
         };
 
-        console.log('Final transformed data due_date:', transformedData.due_date);
-        console.log('Final transformed data dueDate:', transformedData.dueDate);
-
+        // Update the cache with fresh data
+        updateCache(transformedData);
         return transformedData;
       } catch (error) {
-        console.error('Error fetching project:', error);
+        if (cachedProject) return cachedProject; // Fallback to cache on error
         throw error;
       }
     },
-    staleTime: 60000 // 1 minute
+    staleTime: 60000
   });
 
   // Effect to initialize form values when project data is available
@@ -271,35 +285,32 @@ export default function ProjectDetails() {
   // Update progress mutation
   const updateProgressMutation = useMutation({
     mutationFn: async (progress: number) => {
-      console.log('Updating project progress:', {
-        projectId: id,
-        progress: progress
-      });
+      // Update cache first
+      updateCache({ progress });
 
-      // Use the internal API endpoint for progress updates
+      // Then call API
       const response = await fetch(`/api/projects/${id}`, {
-        method: 'PATCH', // Keep using PATCH for internal API
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ progress }) // Send just the progress value
+        body: JSON.stringify({ progress })
       });
 
       if (!response.ok) throw new Error("Failed to update progress");
       return response.json();
     },
     onSuccess: () => {
-      // Make sure to invalidate both query patterns to ensure UI updates
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/freshbooks/clients", id, "projects", id]
-      });
+      // Update the query data directly instead of invalidating
+      queryClient.setQueryData(
+        ["/api/freshbooks/clients", id, "projects", id],
+        (oldData) => {
+          if (!oldData) return cachedProject;
+          // Merge the progress update with existing data
+          return { ...oldData, progress: cachedProject?.progress };
+        }
+      );
 
-      toast({
-        title: "Success",
-        description: "Project progress updated",
-      });
+      toast({ title: "Success", description: "Project progress updated" });
     },
     onError: (error) => {
       console.error("Error updating progress:", error);
@@ -308,7 +319,7 @@ export default function ProjectDetails() {
         description: "Failed to update progress. Please try again.",
         variant: "destructive",
       });
-    },
+    }
   });
 
   // File upload mutation
