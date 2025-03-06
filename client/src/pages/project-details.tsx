@@ -73,13 +73,22 @@ interface FreshbooksProject {
   progress?: number;
 }
 
-// Helper function to safely format dates
+// Helper function to safely format dates with better error handling and logging
 const formatDate = (dateString: string | null | undefined): string => {
-  if (!dateString) return 'Date not available';
+  if (!dateString) {
+    console.log('No date string provided to formatDate');
+    return 'Date not available';
+  }
   try {
-    return new Date(dateString).toLocaleString();
+    console.log('Formatting date string:', dateString);
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date string:', dateString);
+      return 'Invalid date';
+    }
+    return date.toLocaleDateString();
   } catch (error) {
-    console.error('Error formatting date:', error);
+    console.error('Error formatting date:', error, 'Date string:', dateString);
     return 'Date not available';
   }
 };
@@ -134,17 +143,23 @@ export default function ProjectDetails() {
         }
 
         const data = await response.json();
-        console.log('Received project data:', data);
+        console.log('Raw project response:', data);
 
-        // Handle both direct and nested response formats
-        const projectData = data.project ? data.project : data;
+        // Extract project data from the response
+        const projectData = data.project || data;
+        console.log('Extracted project data:', projectData);
 
-        return {
+        // Transform the data to match our interface
+        const transformedData = {
           ...projectData,
-          due_date: projectData.due_date || undefined,  // Ensure due_date is properly extracted
+          due_date: projectData.due_date || undefined,
+          dueDate: projectData.due_date || projectData.dueDate,
           createdAt: projectData.created_at || projectData.createdAt,
           clientId: projectData.client_id || projectData.clientId,
         };
+
+        console.log('Transformed project data:', transformedData);
+        return transformedData;
       } catch (error) {
         console.error('Error fetching project:', error);
         throw error;
