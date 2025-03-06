@@ -496,26 +496,50 @@ export default function ProjectDetails() {
     updateFinancialMutation.mutate();
   };
 
-
   const updateProjectDetailsMutation = useMutation({
     mutationFn: async (data: { title?: string; description?: string }) => {
+      // Add some debug logging
+      console.log('Updating project details:', data);
+
+      // Ensure description is properly formatted 
+      // (trim excessive whitespace, limit length if needed)
+      const formattedData = {
+        ...data,
+        description: data.description ? data.description.trim().substring(0, 5000) : ''
+      };
+
+      // Make sure we send all required fields
+      const requestBody = {
+        project: {
+          title: project?.title,
+          description: project?.description || '',
+          client_id: project?.clientId,
+          ...formattedData
+        }
+      };
+
+      console.log('API request body:', requestBody);
+
       const response = await fetch(`/api/freshbooks/projects/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({
-          project: {
-            ...data,
-            client_id: project?.clientId
-          }
-        }),
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || errorData.error || 'Failed to update project');
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          console.error('API error response:', errorData);
+          throw new Error(errorData.details || errorData.error || `Failed to update project: ${response.status}`);
+        } else {
+          const errorText = await response.text();
+          console.error('API error text:', errorText);
+          throw new Error(`Server error: ${response.status} - ${errorText.slice(0, 100)}`);
+        }
       }
 
       return response.json();
@@ -808,7 +832,18 @@ export default function ProjectDetails() {
                   />
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => updateProjectDetailsMutation.mutate({ description: editedDescription })}
+                      onClick={() => {
+                        // Validate before submission
+                        if (editedDescription && editedDescription.length > 5000) {
+                          toast({
+                            title: "Error",
+                            description: "Description is too long. Maximum 5000 characters allowed.",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        updateProjectDetailsMutation.mutate({ description: editedDescription });
+                      }}
                       disabled={updateProjectDetailsMutation.isPending}
                     >
                       Save
@@ -941,8 +976,7 @@ export default function ProjectDetails() {
                 <CardDescription>
                   Add notes and updates about the project
                 </CardDescription>
-              </CardHeader>
-              <CardContent>
+              </CardHeader><CardContent>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Textarea
@@ -971,7 +1005,7 @@ export default function ProjectDetails() {
                         <CardContent className="pt-6">
                           <div className="flex justify-between items-start gap-4">
                             <div className="flex-1">
-                                                            <p className="whitespace-pre-wrap mb-2">{note.content}</p>
+                              <p className="whitespace-pre-wrap mb-2">{note.content}</p>
                               <div className="flex items-center text-sm text-muted-foreground">
                                 <span>By {note.createdBy === user?.id ? 'You' : `User ${note.createdBy}`}</span>
                                 <span className="mx-2">•</span>

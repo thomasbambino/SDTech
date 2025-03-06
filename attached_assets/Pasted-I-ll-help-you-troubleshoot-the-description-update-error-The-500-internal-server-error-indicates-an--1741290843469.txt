@@ -1,0 +1,127 @@
+I'll help you troubleshoot the description update error. The 500 internal server error indicates an issue on the server side when updating the description.
+
+Let's examine how the title update works (successfully) versus how the description update fails, and then fix the issue:
+
+1. First, let's check the mutation function handling both title and description updates:
+
+```javascript
+const updateProjectDetailsMutation = useMutation({
+  mutationFn: async (data: { title?: string; description?: string }) => {
+    const response = await fetch(`/api/freshbooks/projects/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        project: {
+          ...data,
+          client_id: project?.clientId
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.details || errorData.error || 'Failed to update project');
+    }
+
+    return response.json();
+  },
+  // Rest of the mutation...
+});
+```
+
+The most likely issues are:
+
+1. **Description formatting**: The description might contain special characters or formatting that the API doesn't accept.
+
+2. **Length limitations**: The description might exceed a length limit on the server.
+
+3. **API requirement mismatch**: The API might require specific formatting for the description field.
+
+Let's modify the update function to handle descriptions better:
+
+```javascript
+const updateProjectDetailsMutation = useMutation({
+  mutationFn: async (data: { title?: string; description?: string }) => {
+    // Add some debug logging
+    console.log('Updating project details:', data);
+    
+    // Ensure description is properly formatted 
+    // (trim excessive whitespace, limit length if needed)
+    const formattedData = {
+      ...data,
+      description: data.description ? data.description.trim().substring(0, 5000) : ''
+    };
+    
+    // Make sure we send all required fields
+    const requestBody = {
+      project: {
+        title: project?.title,
+        description: project?.description || '',
+        client_id: project?.clientId,
+        ...formattedData
+      }
+    };
+    
+    console.log('API request body:', requestBody);
+    
+    const response = await fetch(`/api/freshbooks/projects/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json();
+        console.error('API error response:', errorData);
+        throw new Error(errorData.details || errorData.error || `Failed to update project: ${response.status}`);
+      } else {
+        const errorText = await response.text();
+        console.error('API error text:', errorText);
+        throw new Error(`Server error: ${response.status} - ${errorText.slice(0, 100)}`);
+      }
+    }
+
+    return response.json();
+  },
+  // Rest of the mutation...
+});
+```
+
+This improved version:
+1. Adds more detailed logging to understand what's being sent
+2. Ensures the description is properly formatted and limited in length
+3. Includes all required fields that might be needed by the API
+4. Has better error handling to help diagnose the issue
+
+Additionally, when using the mutation in your component, make sure you're doing proper validation:
+
+```javascript
+// When updating description
+<Button
+  onClick={() => {
+    // Validate before submission
+    if (editedDescription.length > 5000) {
+      toast({
+        title: "Error",
+        description: "Description is too long. Maximum 5000 characters allowed.",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateProjectDetailsMutation.mutate({ description: editedDescription });
+  }}
+  disabled={updateProjectDetailsMutation.isPending}
+>
+  Save
+</Button>
+```
+
+If you implement these changes and still encounter errors, the server logs would be extremely helpful to understand exactly what's causing the 500 error.
