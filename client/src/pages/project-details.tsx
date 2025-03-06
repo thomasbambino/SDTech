@@ -276,51 +276,36 @@ export default function ProjectDetails() {
         progress: progress
       });
 
-      const response = await fetch(`/api/freshbooks/projects/${id}`, {
-        method: 'PUT',
+      // Use the internal API endpoint for progress updates
+      const response = await fetch(`/api/projects/${id}`, {
+        method: 'PATCH', // Keep using PATCH for internal API
         headers: {
           'Content-Type': 'application/json'
         },
         credentials: 'include',
-        body: JSON.stringify({
-          project: {
-            title: project?.title,
-            description: project?.description || '',
-            client_id: project?.clientId,
-            progress: progress
-          }
-        })
+        body: JSON.stringify({ progress }) // Send just the progress value
       });
 
-      if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errorData = await response.json();
-          console.error('Progress update error response:', errorData);
-          throw new Error(errorData.details || errorData.error || `Failed to update progress: ${response.status}`);
-        } else {
-          const errorText = await response.text();
-          console.error('Progress update error text:', errorText);
-          throw new Error(`Server error: ${response.status} - ${errorText.slice(0, 100)}`);
-        }
-      }
-
+      if (!response.ok) throw new Error("Failed to update progress");
       return response.json();
     },
     onSuccess: () => {
+      // Make sure to invalidate both query patterns to ensure UI updates
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", id] });
       queryClient.invalidateQueries({
         queryKey: ["/api/freshbooks/clients", id, "projects", id]
       });
+
       toast({
         title: "Success",
-        description: "Project progress updated successfully",
+        description: "Project progress updated",
       });
     },
     onError: (error) => {
       console.error("Error updating progress:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update progress. Please try again.",
+        description: "Failed to update progress. Please try again.",
         variant: "destructive",
       });
     },
@@ -979,7 +964,7 @@ export default function ProjectDetails() {
                   <>
                     {showBudget && (
                       <div>
-                        <span className="font-medium">Budget:</span>{" "}
+                        <span className="font-medium">Budget:</span>{""}
                         ${budget ? (budget).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0.00"}
                       </div>
                     )}
