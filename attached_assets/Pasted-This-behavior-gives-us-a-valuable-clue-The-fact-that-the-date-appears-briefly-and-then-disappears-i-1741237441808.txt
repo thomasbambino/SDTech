@@ -1,0 +1,83 @@
+This behavior gives us a valuable clue! The fact that the date appears briefly and then disappears indicates that:
+
+1. The date is initially being rendered correctly after the update
+2. But then something is causing it to revert to "Not set"
+
+This pattern strongly suggests a race condition or a secondary fetch that's overriding the updated data. Here's what I suspect is happening:
+
+1. You update the date through `updateDueDateMutation`
+2. The mutation successfully updates the server data
+3. The success callback invalidates the query and React Query refetches the data
+4. Briefly, the updated data with the due date is shown
+5. But then another fetch happens that doesn't include the due date, overriding it
+
+Let's address this with a more direct approach:
+
+```jsx
+// In your updateDueDateMutation
+const updateDueDateMutation = useMutation({
+  // Existing mutation function...
+  
+  onSuccess: (data, variables) => {
+    // Store the date for direct update
+    const updatedDate = variables.toISOString().split('T')[0];
+    
+    // Immediately update the UI with the new date without refetching
+    queryClient.setQueryData(
+      ["/api/freshbooks/clients", id, "projects", id], 
+      (oldData) => {
+        if (!oldData) return oldData;
+        
+        return {
+          ...oldData,
+          due_date: updatedDate,
+          dueDate: updatedDate
+        };
+      }
+    );
+    
+    // Don't invalidate queries yet - this avoids the race condition
+    
+    toast({
+      title: "Success",
+      description: "Due date updated successfully",
+    });
+    setIsEditingDueDate(false);
+    
+    // Schedule invalidation for later to ensure server consistency
+    setTimeout(() => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/freshbooks/projects"]
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/freshbooks/clients", project?.clientId, "projects"]
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/freshbooks/clients", id, "projects", id]
+      });
+    }, 500);
+  },
+  // Rest of mutation config...
+});
+```
+
+This approach:
+1. Immediately updates the local cache with the new date after a successful update
+2. Displays the toast and closes the date picker
+3. Delays the query invalidation to avoid race conditions
+
+Additionally, if you're still having issues, let's try to understand what's happening in the data transformations. Could you add these debug logs to your code?
+
+```jsx
+// In your queryFn, add this debug log
+const data = await response.json();
+console.log('Raw API response:', JSON.stringify(data).substring(0, 500)); // Show first 500 chars
+
+// After your transformation
+console.log('After transformation:', {
+  due_date: transformedData.due_date,
+  dueDate: transformedData.dueDate
+});
+```
+
+This will help us see what might be happening with the data when it's fetched after the update.

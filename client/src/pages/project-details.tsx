@@ -301,29 +301,44 @@ export default function ProjectDetails() {
 
       return response.json();
     },
-    onSuccess: (data) => {
-      // Invalidate the specific query for this project
-      queryClient.invalidateQueries({
-        queryKey: ["/api/freshbooks/clients", id, "projects", id]
-      });
+    onSuccess: (data, variables) => {
+      // Store the date for direct update
+      const updatedDate = variables.toISOString().split('T')[0];
 
-      // Then also update the local state directly with the updated data
+      // Immediately update the UI with the new date without refetching
       queryClient.setQueryData(
-        ["/api/freshbooks/clients", id, "projects", id],
+        ["/api/freshbooks/clients", id, "projects", id], 
         (oldData) => {
+          if (!oldData) return oldData;
+
           return {
             ...oldData,
-            due_date: data.project?.due_date || data.due_date,
-            dueDate: data.project?.due_date || data.due_date
+            due_date: updatedDate,
+            dueDate: updatedDate
           };
         }
       );
+
+      // Don't invalidate queries yet - this avoids the race condition
 
       toast({
         title: "Success",
         description: "Due date updated successfully",
       });
       setIsEditingDueDate(false);
+
+      // Schedule invalidation for later to ensure server consistency
+      setTimeout(() => {
+        queryClient.invalidateQueries({
+          queryKey: ['/api/freshbooks/projects']
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/freshbooks/clients', project?.clientId, 'projects']
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/freshbooks/clients', id, 'projects', id]
+        });
+      }, 500);
     },
     onError: (error) => {
       console.error("Error updating due date:", error);
