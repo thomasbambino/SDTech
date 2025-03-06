@@ -120,24 +120,17 @@ export default function ProjectDetails() {
     isLoading: projectLoading,
     error: projectError
   } = useQuery<FreshbooksProject>({
-    queryKey: ["/api/freshbooks/clients", id, "projects", id, Date.now()], // Add timestamp to force fresh data
+    queryKey: ["/api/freshbooks/clients", id, "projects", id],
     queryFn: async () => {
       try {
         console.log('Fetching project details for ID:', id);
 
         const response = await fetch(`/api/freshbooks/clients/${id}/projects/${id}`, {
-          credentials: 'include',
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
+          credentials: 'include'
         });
-
-        console.log('Response status:', response.status);
 
         if (!response.ok) {
           const contentType = response.headers.get('content-type');
-
           if (contentType && contentType.includes('application/json')) {
             const errorData = await response.json();
             throw new Error(errorData.error || `Error: ${response.status}`);
@@ -153,27 +146,27 @@ export default function ProjectDetails() {
         const projectData = data.project || data;
         console.log('Extracted project data:', projectData);
 
-        // Transform the data to match our interface
+        // Transform to match your interface
         const transformedData = {
           ...projectData,
-          due_date: projectData.due_date || undefined,
+          id: projectData.id?.toString(),
+          clientId: (projectData.client_id || projectData.clientId)?.toString(),
+
+          // Handle due date format - use both snake_case and camelCase
           dueDate: projectData.due_date || projectData.dueDate,
-          createdAt: projectData.created_at || projectData.createdAt,
-          clientId: projectData.client_id || projectData.clientId,
+          due_date: projectData.due_date || projectData.dueDate,
         };
 
-        console.log('Transformed project data:', transformedData);
+        console.log('Transformed project data (with dates):', transformedData);
         return transformedData;
       } catch (error) {
         console.error('Error fetching project:', error);
         throw error;
       }
     },
-    // Add options to prevent caching
-    refetchInterval: 0,
-    staleTime: 0,
-    cacheTime: 0,
-    retry: 1
+    // Add these options for better data handling
+    refetchOnWindowFocus: true,
+    staleTime: 300000 // 5 minutes
   });
 
   // Add note mutation
@@ -273,10 +266,9 @@ export default function ProjectDetails() {
     },
   });
 
-  // Add due date update mutation
+  // Update due date mutation
   const updateDueDateMutation = useMutation({
     mutationFn: async (date: Date) => {
-      // Format date as YYYY-MM-DD
       const formattedDate = date.toISOString().split('T')[0];
 
       console.log('Updating due date:', {
@@ -284,7 +276,6 @@ export default function ProjectDetails() {
         date: formattedDate
       });
 
-      // Create a request that exactly mimics what EditProjectDialog does
       const response = await fetch(`/api/freshbooks/projects/${id}`, {
         method: 'PUT',
         headers: {
@@ -310,17 +301,23 @@ export default function ProjectDetails() {
 
       return response.json();
     },
-    onSuccess: () => {
-      // Follow the exact pattern from EditProjectDialog
-      queryClient.invalidateQueries({ queryKey: ['/api/freshbooks/projects'] });
+    onSuccess: (data) => {
+      // Invalidate the specific query for this project
       queryClient.invalidateQueries({
-        queryKey: ['/api/freshbooks/clients', project?.clientId, 'projects']
+        queryKey: ["/api/freshbooks/clients", id, "projects", id]
       });
 
-      // Also invalidate the specific query used in this component
-      queryClient.invalidateQueries({
-        queryKey: ['/api/freshbooks/clients', id, 'projects', id]
-      });
+      // Then also update the local state directly with the updated data
+      queryClient.setQueryData(
+        ["/api/freshbooks/clients", id, "projects", id],
+        (oldData) => {
+          return {
+            ...oldData,
+            due_date: data.project?.due_date || data.due_date,
+            dueDate: data.project?.due_date || data.due_date
+          };
+        }
+      );
 
       toast({
         title: "Success",
@@ -366,8 +363,9 @@ export default function ProjectDetails() {
       if (!response.ok) throw new Error("Failed to fetch notes");
       return response.json();
     },
-    staleTime: 0, // Always fetch fresh data
-    refetchOnMount: true // Refetch when component mounts
+    staleTime: 300000, // 5 minutes
+    refetchOnMount: true,
+    refetchOnWindowFocus: true
   });
 
   if (projectLoading) {

@@ -1,0 +1,75 @@
+Let's fix the infinite loading issue. It sounds like the aggressive cache busting approach is causing problems. Let's try a more measured solution:
+
+1. First, let's remove the page reload and other cache-busting approaches that might be causing the spinning:
+
+```jsx
+// In your project query configuration, use this instead
+{
+  queryKey: ["/api/freshbooks/clients", id, "projects", id],
+  queryFn: async () => {
+    // Your existing fetch function
+  },
+  // Add these options
+  refetchOnWindowFocus: true,
+  staleTime: 0
+}
+```
+
+2. For the updateDueDateMutation's onSuccess handler, focus on explicitly invalidating the exact query:
+
+```jsx
+onSuccess: (data) => {
+  // Invalidate the specific query for this project
+  queryClient.invalidateQueries({
+    queryKey: ["/api/freshbooks/clients", id, "projects", id]
+  });
+  
+  // Then also update the local state directly with the updated data
+  // This ensures the UI reflects the change immediately, even if the refetch hasn't happened yet
+  queryClient.setQueryData(
+    ["/api/freshbooks/clients", id, "projects", id], 
+    (oldData) => {
+      // Make sure to update both due_date and dueDate properties
+      return {
+        ...oldData,
+        due_date: data.project?.due_date || data.due_date,
+        dueDate: data.project?.due_date || data.due_date
+      };
+    }
+  );
+  
+  toast({
+    title: "Success",
+    description: "Due date updated successfully",
+  });
+  setIsEditingDueDate(false);
+}
+```
+
+3. Finally, let's add a debug log right in the JSX to see what data is actually being rendered:
+
+```jsx
+// Right before the return statement
+console.log('Project data right before render:', {
+  id: project?.id,
+  due_date: project?.due_date,
+  dueDate: project?.dueDate
+});
+
+// Then in the due date display portion of your JSX
+<div>
+  <span className="font-medium">Due:</span>{" "}
+  {(() => {
+    const dueDate = project?.due_date || project?.dueDate;
+    console.log('Due date in JSX:', dueDate);
+    return dueDate ? formatDate(dueDate) : "Not set";
+  })()}
+</div>
+```
+
+These changes should:
+1. Stop the infinite loading
+2. Make sure the project data is properly invalidated after update
+3. Provide useful debugging information to see what's happening with the date
+
+Let me know if this resolves both issues (showing the date and avoiding the spinning/loading state).
