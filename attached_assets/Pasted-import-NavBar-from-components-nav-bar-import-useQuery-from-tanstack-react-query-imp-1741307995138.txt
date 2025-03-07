@@ -85,10 +85,10 @@ const getCreatedDate = (project: Project): string | undefined => {
 const formatCurrency = (value: number | string | undefined): string => {
   if (!value) return "$0";
   const numValue = typeof value === 'string' ? parseFloat(value) : value;
-
+  
   // If value seems too large (e.g., in cents), convert to dollars
   const adjustedValue = numValue > 1000 && Number.isInteger(numValue) ? numValue / 100 : numValue;
-
+  
   return `$${adjustedValue.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -126,7 +126,7 @@ export default function Projects() {
 
         if (!response.ok) {
           console.log(`Primary endpoint failed, status: ${response.status}`);
-
+          
           // If primary endpoint fails and we're admin, try fallback
           if (isAdmin) {
             console.log(`Trying fallback endpoint: ${fallbackEndpoint}`);
@@ -137,16 +137,16 @@ export default function Projects() {
                 'Pragma': 'no-cache'
               }
             });
-
+            
             if (!fallbackResponse.ok) {
               const fallbackError = await fallbackResponse.json();
               throw new Error(fallbackError.error || `Fallback also failed: ${fallbackResponse.status}`);
             }
-
+            
             console.log("Fallback successful");
             return normalizeProjects(await fallbackResponse.json());
           }
-
+          
           const errorData = await response.json();
           throw new Error(errorData.error || `Error: ${response.status}`);
         }
@@ -173,7 +173,7 @@ export default function Projects() {
       console.error("Expected array of projects, received:", data);
       return [];
     }
-
+    
     return data.map((project: any) => ({
       id: project.id?.toString(),
       title: project.title || "Untitled Project",
@@ -211,7 +211,7 @@ export default function Projects() {
   useEffect(() => {
     // Clear any cached data when the component loads
     localStorage.removeItem('projects_cache');
-
+    
     // Force a refetch when component mounts to ensure fresh data
     refetch();
   }, [refetch]);
@@ -278,7 +278,7 @@ export default function Projects() {
                     <Badge 
                       variant={
                         getStatus(project).toLowerCase().includes('active') ? 'default' : 
-                        getStatus(project).toLowerCase().includes('complete') ? 'outline' : 
+                        getStatus(project).toLowerCase().includes('complete') ? 'success' : 
                         'secondary'
                       }
                     >
