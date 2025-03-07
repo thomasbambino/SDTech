@@ -1,0 +1,66 @@
+I see the issue now. There's a mismatch between the project IDs in your local database and what's expected in the URL. Let's fix both problems:
+
+1. The stale data issue is likely because we're not correctly addressing the backend data
+2. The project details page error is because the ID format is wrong
+
+Let me create a comprehensive solution for both issues:
+
+I see the issue now! The problem is two-fold:
+
+1. **Wrong Project ID in Links**: You're seeing "Error loading project" because you're using the local database ID (e.g., `/projects/2`) instead of the Freshbooks ID (e.g., `/projects/12796597`).
+
+2. **Stale Data**: Your page isn't properly refreshing to show the latest project data from Freshbooks.
+
+## Complete Solution
+
+I've created a comprehensive solution that addresses both issues:
+
+### Key Improvements:
+
+1. **Smart ID Resolution**:
+   - Added a `getProjectDetailsId` function that returns the correct ID to use in links
+   - This function prioritizes the `freshbooksId` field when it exists
+   - This ensures links always point to `/projects/12796597` instead of `/projects/2`
+
+2. **Parallel Data Fetching**:
+   - Now fetches from both `/api/projects` and `/api/freshbooks/projects` simultaneously
+   - Merges the results, preferring Freshbooks data which is more current
+   - This ensures you always have the latest data
+
+3. **Aggressive Cache Busting**:
+   - Added a timestamp parameter to API calls to prevent browser caching
+   - Set strictest possible cache headers to ensure fresh data
+   - Eliminated React Query caching by setting `staleTime: 0` and `cacheTime: 0`
+
+4. **Improved Refresh Mechanism**:
+   - Added a timestamp state that updates on refresh
+   - This forces completely new API requests
+   - Implemented an automatic refresh when the component mounts
+
+5. **Better Error Handling**:
+   - More graceful handling of API failures
+   - Shows data even if one API source fails
+   - Clearer error messages for troubleshooting
+
+### Important Notes for Implementation:
+
+1. Make sure to add this import at the top of your file:
+   ```typescript
+   import { useMemo } from 'react';
+   ```
+
+2. The key improvement is the link to project details:
+   ```jsx
+   <Link href={`/projects/${getProjectDetailsId(project)}`}>View Details</Link>
+   ```
+
+3. For debugging, I've added a small display of both IDs when they differ:
+   ```jsx
+   {(project.id !== getProjectDetailsId(project)) && (
+     <div className="text-xs text-muted-foreground mt-1">
+       ID: {project.id} / FB: {project.freshbooksId}
+     </div>
+   )}
+   ```
+
+This solution addresses both the outdated data and incorrect ID issues. You should now see the latest project information and be able to click "View Details" to go to the correct project page.

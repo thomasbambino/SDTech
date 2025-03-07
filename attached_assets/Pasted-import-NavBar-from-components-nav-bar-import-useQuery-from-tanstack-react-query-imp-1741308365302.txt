@@ -14,7 +14,7 @@ import { Loader2, Calendar, DollarSign, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { useAuth } from "@/hooks/use-auth";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 
 interface Project {
   id: string;
@@ -33,7 +33,8 @@ interface Project {
   active?: boolean;
   complete?: boolean;
   progress?: number;
-  freshbooksId?: string;  // Added for ID resolution
+  // Local database fields
+  freshbooksId?: string;
 }
 
 // Helper function to safely format dates
@@ -86,10 +87,10 @@ const getCreatedDate = (project: Project): string | undefined => {
 const formatCurrency = (value: number | string | undefined): string => {
   if (!value) return "$0";
   const numValue = typeof value === 'string' ? parseFloat(value) : value;
-
+  
   // If value seems too large (e.g., in cents), convert to dollars
   const adjustedValue = numValue > 1000 && Number.isInteger(numValue) ? numValue / 100 : numValue;
-
+  
   return `$${adjustedValue.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -135,11 +136,11 @@ export default function Projects() {
           'Expires': '0'
         }
       });
-
+      
       if (!response.ok) {
         throw new Error(`Failed to fetch local projects: ${response.status}`);
       }
-
+      
       const data = await response.json();
       console.log("Local projects data:", data);
       return normalizeProjects(data);
@@ -161,7 +162,7 @@ export default function Projects() {
     queryFn: async () => {
       // Only attempt this if user is admin
       if (!isAdmin) return [];
-
+      
       console.log(`Fetching Freshbooks projects`);
       try {
         const response = await fetch(freshbooksProjectsEndpoint, {
@@ -172,12 +173,12 @@ export default function Projects() {
             'Expires': '0'
           }
         });
-
+        
         if (!response.ok) {
           console.log(`Freshbooks projects endpoint failed: ${response.status}`);
           return []; // Return empty array instead of throwing
         }
-
+        
         const data = await response.json();
         console.log("Freshbooks projects data:", data);
         return normalizeProjects(data);
@@ -199,7 +200,7 @@ export default function Projects() {
       console.error("Expected array of projects, received:", data);
       return [];
     }
-
+    
     return data.map((project: any) => ({
       id: project.id?.toString(),
       title: project.title || "Untitled Project",
@@ -225,7 +226,7 @@ export default function Projects() {
   const mergedProjects = useMemo(() => {
     // Create a map for faster lookup by ID
     const projectMap = new Map();
-
+    
     // First add all local projects to the map
     localProjects.forEach(project => {
       projectMap.set(project.id, project);
@@ -234,12 +235,12 @@ export default function Projects() {
         projectMap.set(project.freshbooksId, project);
       }
     });
-
+    
     // Then add/override with Freshbooks projects which are more up-to-date
     freshbooksProjects.forEach(project => {
       projectMap.set(project.id, project);
     });
-
+    
     // Convert map back to array
     return Array.from(projectMap.values());
   }, [localProjects, freshbooksProjects]);
@@ -250,7 +251,7 @@ export default function Projects() {
     try {
       // Update timestamp to force new queries
       setTimestamp(Date.now());
-
+      
       // Manually trigger refetches
       await Promise.all([
         refetchLocal(),
