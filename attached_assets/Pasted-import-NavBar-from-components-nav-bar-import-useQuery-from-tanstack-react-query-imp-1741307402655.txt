@@ -85,10 +85,10 @@ const getCreatedDate = (project: Project): string | undefined => {
 const formatCurrency = (value: number | string | undefined): string => {
   if (!value) return "$0";
   const numValue = typeof value === 'string' ? parseFloat(value) : value;
-
+  
   // If value seems too large (e.g., in cents), convert to dollars
   const adjustedValue = numValue > 1000 && Number.isInteger(numValue) ? numValue / 100 : numValue;
-
+  
   return `$${adjustedValue.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -122,23 +122,23 @@ export default function Projects() {
 
         if (!response.ok) {
           console.log(`Primary endpoint failed, status: ${response.status}`);
-
+          
           // If primary endpoint fails and we're admin, try fallback
           if (isAdmin) {
             console.log(`Trying fallback endpoint: ${fallbackEndpoint}`);
             const fallbackResponse = await fetch(fallbackEndpoint, {
               credentials: 'include'
             });
-
+            
             if (!fallbackResponse.ok) {
               const fallbackError = await fallbackResponse.json();
               throw new Error(fallbackError.error || `Fallback also failed: ${fallbackResponse.status}`);
             }
-
+            
             console.log("Fallback successful");
             return normalizeProjects(await fallbackResponse.json());
           }
-
+          
           const errorData = await response.json();
           throw new Error(errorData.error || `Error: ${response.status}`);
         }
