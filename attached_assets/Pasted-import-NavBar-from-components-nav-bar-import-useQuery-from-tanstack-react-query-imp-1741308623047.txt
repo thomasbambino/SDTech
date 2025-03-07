@@ -14,7 +14,7 @@ import { Loader2, Calendar, DollarSign, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { useAuth } from "@/hooks/use-auth";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 
 interface Project {
   id: string;
@@ -33,6 +33,7 @@ interface Project {
   active?: boolean;
   complete?: boolean;
   progress?: number;
+  // Local database fields
   freshbooksId?: string;
 }
 
@@ -86,10 +87,10 @@ const getCreatedDate = (project: Project): string | undefined => {
 const formatCurrency = (value: number | string | undefined): string => {
   if (!value) return "$0";
   const numValue = typeof value === 'string' ? parseFloat(value) : value;
-
+  
   // If value seems too large (e.g., in cents), convert to dollars
   const adjustedValue = numValue > 1000 && Number.isInteger(numValue) ? numValue / 100 : numValue;
-
+  
   return `$${adjustedValue.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -136,12 +137,12 @@ export default function Projects() {
             'Expires': '0'
           }
         });
-
+        
         if (!response.ok) {
           console.log(`Freshbooks projects endpoint failed: ${response.status}`);
           throw new Error(`Failed to fetch Freshbooks projects: ${response.status}`);
         }
-
+        
         const data = await response.json();
         console.log("Freshbooks projects data:", data);
         return normalizeProjects(data);
@@ -163,7 +164,7 @@ export default function Projects() {
       console.error("Expected array of projects, received:", data);
       return [];
     }
-
+    
     return data.map((project: any) => ({
       id: project.id?.toString(),
       title: project.title || "Untitled Project",
@@ -191,7 +192,7 @@ export default function Projects() {
     try {
       // Update timestamp to force new queries
       setTimestamp(Date.now());
-
+      
       // Manually trigger refetch
       await refetchFreshbooks();
     } finally {
@@ -239,7 +240,7 @@ export default function Projects() {
             {isAdmin && <CreateProjectDialog />}
           </div>
         </div>
-
+        
         {/* Debug toggle */}
         <div className="mb-4">
           <Button 
@@ -283,7 +284,7 @@ export default function Projects() {
                     <Badge 
                       variant={
                         getStatus(project).toLowerCase().includes('active') ? 'default' : 
-                        getStatus(project).toLowerCase().includes('complete') ? 'secondary' : 
+                        getStatus(project).toLowerCase().includes('complete') ? 'success' : 
                         'secondary'
                       }
                     >
@@ -324,7 +325,7 @@ export default function Projects() {
                         <span>Progress: {project.progress}%</span>
                       </div>
                     )}
-
+                    
                     {/* Debug info */}
                     {showDebugInfo && (
                       <div className="text-xs text-muted-foreground mt-3 p-2 bg-muted rounded-sm">
@@ -334,7 +335,7 @@ export default function Projects() {
                       </div>
                     )}
                   </div>
-
+                  
                   <Button variant="outline" className="w-full" asChild>
                     <Link href={`/projects/${getProjectDetailsId(project)}`}>View Details</Link>
                   </Button>
