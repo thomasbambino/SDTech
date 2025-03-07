@@ -73,10 +73,10 @@ export default function Projects() {
         const errorData = await response.json();
         throw new Error(errorData.error || `Error: ${response.status}`);
       }
-
+      
       const data = await response.json();
       console.log("Projects data from API:", data);
-
+      
       // Transform the data to handle different formats
       return data.map((project: any) => ({
         ...project,
@@ -102,7 +102,7 @@ export default function Projects() {
   useEffect(() => {
     if (projects) {
       setLocalProjects(projects);
-
+      
       // Save to localStorage for persistence
       try {
         localStorage.setItem('projects_cache', JSON.stringify(projects));
