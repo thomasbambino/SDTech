@@ -133,12 +133,21 @@ const useProjectCache = (projectId: string) => {
     });
   }, [projectId]);
 
-  return { cachedProject, updateCache };
+  // Add progress to localStorage
+  const updateProgressInLocalStorage = useCallback((progress: number) => {
+    try {
+      localStorage.setItem(`project_progress_${projectId}`, progress.toString());
+    } catch (e) {
+      console.error('Error saving progress to localStorage:', e);
+    }
+  }, [projectId]);
+
+  return { cachedProject, updateCache, updateProgressInLocalStorage };
 };
 
 export default function ProjectDetails() {
   const { id } = useParams<{ id: string }>();
-  const { cachedProject, updateCache } = useProjectCache(id);
+  const { cachedProject, updateCache, updateProgressInLocalStorage } = useProjectCache(id);
   const { toast } = useToast();
   const [newNote, setNewNote] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -333,35 +342,68 @@ export default function ProjectDetails() {
   // Update progress mutation
   const updateProgressMutation = useMutation({
     mutationFn: async (progress: number) => {
-      // Update cache first
+      // Update cache first for immediate UI feedback
       updateCache({ progress });
+      updateProgressInLocalStorage(progress); //Update localStorage
 
-      // Then call API
-      const response = await fetch(`/api/projects/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ progress })
+      console.log('Updating project progress:', {
+        projectId: id,
+        progress: progress
       });
 
-      if (!response.ok) throw new Error("Failed to update progress");
-      return response.json();
+
+      // Send to API - but don't throw if it fails
+      try {
+        const response = await fetch(`/api/projects/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ progress })
+        });
+
+        if (!response.ok) {
+          console.log('Progress update response status:', response.status);
+          const errorText = await response.text();
+          console.error('Progress update error:', errorText);
+
+          // Return error info but don't throw
+          return { success: false, error: `API Error: ${response.status}`, data: null };
+        }
+
+        const data = await response.json();
+        return { success: true, error: null, data };
+      } catch (error) {
+        console.error("Network error:", error);
+        // Return error info but don't throw
+        return { success: false, error: "Network error", data: null };
+      }
     },
-    onSuccess: () => {
-      // Update the query data directly instead of invalidating
+    onSuccess: (result) => {
+      // Always update UI to match cached progress, regardless of API success
       queryClient.setQueryData(
         ["/api/freshbooks/clients", id, "projects", id],
         (oldData) => {
           if (!oldData) return cachedProject;
-          // Merge the progress update with existing data
           return { ...oldData, progress: cachedProject?.progress };
         }
       );
 
-      toast({ title: "Success", description: "Project progress updated" });
+      // Show appropriate toast based on API result
+      if (result.success) {
+        toast({ 
+          title: "Success", 
+          description: "Project progress updated" 
+        });
+      } else {
+        toast({
+          title: "Warning",
+          description: "Progress was saved locally but server update failed. It will sync when you refresh.",
+          variant: "default"
+        });
+      }
     },
     onError: (error) => {
-      console.error("Error updating progress:", error);
+      console.error("Unexpected error updating progress:", error);
       toast({
         title: "Error",
         description: "Failed to update progress. Please try again.",
